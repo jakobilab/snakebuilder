@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "snakebuilder"
+version = "0.1.0"
+description = "Snakemake workflow generator and rule registry"
+authors = [{ name = "Walker Mellon" }]
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "pyyaml",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "black"]
+
+[project.scripts]
+snakebuilder = "snakebuilder.cli:main"
+
+[tool.setuptools.package-data]
+"snakebuilder.rules" = ["core_rules.json"]

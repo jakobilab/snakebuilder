@@ -1,0 +1,14 @@
+pyproject.toml
+snakebuilder/__init__.py
+snakebuilder/cli.py
+snakebuilder.egg-info/PKG-INFO
+snakebuilder.egg-info/SOURCES.txt
+snakebuilder.egg-info/dependency_links.txt
+snakebuilder.egg-info/entry_points.txt
+snakebuilder.egg-info/requires.txt
+snakebuilder.egg-info/top_level.txt
+snakebuilder/builder/core.py
+snakebuilder/builder/snakefile_generator.py
+snakebuilder/rules/__init__.py
+snakebuilder/rules/core_rules.json
+snakebuilder/rules/registry.py

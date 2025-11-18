@@ -1,0 +1,149 @@
+{
+  "decompress_inputs": {
+    "name": "decompress_inputs",
+    "description": "Decompress FASTA and GTF files from gzip to plain text format for indexing.",
+    "input": {
+      "fasta_gz": "config['inputs']['fasta_gz']",
+      "gtf_gz": "config['inputs']['gtf_gz']"
+    },
+    "output": {
+      "fasta": "config['inputs']['fasta']",
+      "gtf": "config['inputs']['gtf']"
+    },
+    "threads": 1,
+    "resources": { "mem_mb": 500 },
+    "shell": "echo '🗜️ Decompressing FASTA and GTF'; gunzip -c {input.fasta_gz} > {output.fasta}; gunzip -c {input.gtf_gz} > {output.gtf}"
+  },
+
+  "fastp": {
+    "name": "fastp",
+    "description": "Perform quality trimming and adapter removal for paired-end FASTQ reads.",
+    "input": {
+      "r1": "lambda wildcards: config['samples'][wildcards.sample]['fastq1']",
+      "r2": "lambda wildcards: config['samples'][wildcards.sample]['fastq2']"
+    },
+    "output": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz",
+      "done": "run_output/fastp/{sample}/fastp.done"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": 2000 },
+    "shell": "mkdir -p run_output/fastp/{wildcards.sample}; /home/wjcmellon/fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}; touch {output.done}"
+  },
+
+  "build_bowtie2_index": {
+    "name": "build_bowtie2_index",
+    "description": "Build Bowtie2 genome index from decompressed FASTA.",
+    "input": {
+      "fasta": "rules.decompress_inputs.output.fasta"
+    },
+    "output": {
+      "done": "run_output/bowtie2_index/bowtie2.done"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": "MEMORY" },
+    "params": {
+      "idx_dir": "config['inputs']['bowtie2_index_path']"
+    },
+    "shell": "mkdir -p {params.idx_dir}; bowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}; touch {output.done}"
+  },
+
+  "remove_rrna": {
+    "name": "remove_rrna",
+    "description": "Remove rRNA reads using Bowtie2 alignment with built rRNA index.",
+    "input": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz"
+    },
+    "output": {
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
+      "done": "run_output/rrna/{sample}/remove_rrna.done"
+    },
+    "params": {
+      "index_prefix": "config['inputs']['bowtie2_index_path'] + '/reference_index'"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": "MEMORY" },
+    "shell": "mkdir -p run_output/rrna/{wildcards.sample}; bowtie2 -x {params.index_prefix} -1 {input.r1} -2 {input.r2} --no-unal --omit-sec-seq --threads {threads} --mm --seed 1337 --time --un-conc-gz run_output/rrna/{wildcards.sample}_no_rRNA.fastq.gz 2> run_output/rrna/{wildcards.sample}_no_rRNA.log; touch {output.done}"
+  },
+
+  "build_star_index": {
+    "name": "build_star_index",
+    "description": "Build STAR genome index using decompressed FASTA and GTF files.",
+    "input": {
+      "fasta": "rules.decompress_inputs.output.fasta",
+      "gtf": "rules.decompress_inputs.output.gtf"
+    },
+    "output": {
+      "done": "run_output/star_index/star_index.done"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": "MEMORY" },
+    "params": {
+      "star_dir": "config['inputs']['star_index_path']"
+    },
+    "shell": "mkdir -p {params.star_dir}; STAR --runThreadN {threads} --runMode genomeGenerate --genomeDir {params.star_dir} --genomeFastaFiles {input.fasta} --sjdbGTFfile {input.gtf} --sjdbOverhang 99; touch {output.done}"
+  },
+
+  "star_align": {
+    "name": "star_align",
+    "description": "Align reads with STAR using genome index and filtered reads.",
+    "input": {
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
+      "index": "config['inputs']['star_index_path']",
+      "gtf": "config['inputs']['gtf']"
+    },
+    "output": {
+      "sam": "run_output/alignment/{sample}/{sample}_Aligned.out.sam",
+      "done": "run_output/alignment/{sample}/star.done"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": "MEMORY" },
+    "shell": "mkdir -p run_output/alignment/{wildcards.sample}; STAR --runThreadN {threads} --genomeDir {input.index} --readFilesIn {input.r1} {input.r2} --readFilesCommand gunzip -c --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}_ --quantMode GeneCounts --twopassMode Basic; touch {output.done}"
+  },
+
+  "prep_circtools": {
+    "name": "prep_circtools",
+    "description": "Prepare STAR alignments and sample metadata for Circtools detection.",
+    "input": {
+      "alignment_done": "expand('run_output/alignment/{sample}/star.done', sample=SAMPLES)"
+    },
+    "output": {
+      "samplesheet": "run_output/circtools_ci/samplesheet",
+      "bamlist": "run_output/circtools_ci/bam_files.txt",
+      "done": "run_output/alignment/processing.done"
+    },
+    "params": {
+      "outdir": "'run_output/circtools_ci'"
+    },
+    "threads": 1,
+    "resources": { "mem_mb": 1000 },
+    "shell": "echo '🧩 Preparing circtools input files'; mkdir -p {params.outdir}; bash /beegfs/homes/wjcmellon/circtools.cloud/app/scripts/prep_circtools.sh run_output/alignment {params.outdir}; touch {output.done}"
+  },
+
+  
+  "detect": {
+    "name": "detect",
+    "description": "Run circRNA detection using Circtools on aligned BAM files.",
+    "input": {
+      "samplesheet": "run_output/circtools_ci/samplesheet",
+      "bamlist": "run_output/circtools_ci/bam_files.txt",
+      "annotation": "config['inputs']['gtf']",
+      "reference": "config['inputs']['fasta']",
+      "prep_done": "run_output/alignment/processing.done"
+    },
+    "output": {
+      "done": "run_output/circtools_ci/detect.done"
+    },
+    "threads": "THREADS",
+    "resources": { "mem_mb": "MEMORY" },
+    "params": {
+      "Nr1": "config.get('detect', {}).get('Nr1', 2)",
+      "Nr2": "config.get('detect', {}).get('Nr2', 2)"
+    },
+    "shell": "circtools detect @{input.samplesheet} -ss -T {threads} -an {input.annotation} -A {input.reference} -B @{input.bamlist} -D -M -G -Nr {params.Nr1} {params.Nr2} -O ./run_output/circtools_ci -k"
+  }
+}

@@ -1,0 +1,12 @@
+Metadata-Version: 2.4
+Name: snakebuild
+Version: 0.1.0
+Summary: Snakemake workflow generator and rule registry
+Author: Your Name
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: pyyaml
+Requires-Dist: snakemake
+Provides-Extra: dev
+Requires-Dist: pytest; extra == "dev"
+Requires-Dist: black; extra == "dev"

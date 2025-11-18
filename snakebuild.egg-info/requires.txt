@@ -1,0 +1,6 @@
+pyyaml
+snakemake
+
+[dev]
+pytest
+black

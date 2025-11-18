@@ -1,0 +1,2 @@
+[console_scripts]
+snakebuilder = snakebuilder.cli:main
