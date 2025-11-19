@@ -1,18 +1,16 @@
 {
-  "decompress_inputs": {
-    "name": "decompress_inputs",
-    "description": "Decompress FASTA and GTF files from gzip to plain text format for indexing.",
+  "check_inputs": {
+    "name": "check_inputs",
+    "description": "Check input FASTQ files",
     "input": {
-      "fasta_gz": "config['inputs']['fasta_gz']",
-      "gtf_gz": "config['inputs']['gtf_gz']"
+      "samples": "lambda wildcards: [f for s in config['samples'].values() for f in (s['fastq1'], s['fastq2'])]"
     },
     "output": {
-      "fasta": "config['inputs']['fasta']",
-      "gtf": "config['inputs']['gtf']"
+      "done": "run_output/check.done"
     },
     "threads": 1,
     "resources": { "mem_mb": 500 },
-    "shell": "echo '🗜️ Decompressing FASTA and GTF'; gunzip -c {input.fasta_gz} > {output.fasta}; gunzip -c {input.gtf_gz} > {output.gtf}"
+    "shell": "echo 'Checking inputs'; for f in {input.samples}; do echo Checking $f; gunzip -t \"$f\"; done; touch {output.done}"
   },
 
   "fastp": {
@@ -32,23 +30,6 @@
     "shell": "mkdir -p run_output/fastp/{wildcards.sample}; /home/wjcmellon/fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}; touch {output.done}"
   },
 
-  "build_bowtie2_index": {
-    "name": "build_bowtie2_index",
-    "description": "Build Bowtie2 genome index from decompressed FASTA.",
-    "input": {
-      "fasta": "rules.decompress_inputs.output.fasta"
-    },
-    "output": {
-      "done": "run_output/bowtie2_index/bowtie2.done"
-    },
-    "threads": "THREADS",
-    "resources": { "mem_mb": "MEMORY" },
-    "params": {
-      "idx_dir": "config['inputs']['bowtie2_index_path']"
-    },
-    "shell": "mkdir -p {params.idx_dir}; bowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}; touch {output.done}"
-  },
-
   "remove_rrna": {
     "name": "remove_rrna",
     "description": "Remove rRNA reads using Bowtie2 alignment with built rRNA index.",
@@ -62,29 +43,11 @@
       "done": "run_output/rrna/{sample}/remove_rrna.done"
     },
     "params": {
-      "index_prefix": "config['inputs']['bowtie2_index_path'] + '/reference_index'"
+      "index_prefix": "config['inputs']['bowtie2_index_path']"
     },
     "threads": "THREADS",
     "resources": { "mem_mb": "MEMORY" },
-    "shell": "mkdir -p run_output/rrna/{wildcards.sample}; bowtie2 -x {params.index_prefix} -1 {input.r1} -2 {input.r2} --no-unal --omit-sec-seq --threads {threads} --mm --seed 1337 --time --un-conc-gz run_output/rrna/{wildcards.sample}_no_rRNA.fastq.gz 2> run_output/rrna/{wildcards.sample}_no_rRNA.log; touch {output.done}"
-  },
-
-  "build_star_index": {
-    "name": "build_star_index",
-    "description": "Build STAR genome index using decompressed FASTA and GTF files.",
-    "input": {
-      "fasta": "rules.decompress_inputs.output.fasta",
-      "gtf": "rules.decompress_inputs.output.gtf"
-    },
-    "output": {
-      "done": "run_output/star_index/star_index.done"
-    },
-    "threads": "THREADS",
-    "resources": { "mem_mb": "MEMORY" },
-    "params": {
-      "star_dir": "config['inputs']['star_index_path']"
-    },
-    "shell": "mkdir -p {params.star_dir}; STAR --runThreadN {threads} --runMode genomeGenerate --genomeDir {params.star_dir} --genomeFastaFiles {input.fasta} --sjdbGTFfile {input.gtf} --sjdbOverhang 99; touch {output.done}"
+    "shell": "source /etc/profile.d/modules.sh\n        module load bowtie2\n\n  mkdir -p run_output/rrna/{wildcards.sample}; bowtie2 -x {params.index_prefix} -1 {input.r1} -2 {input.r2} --no-unal --omit-sec-seq --threads {threads} --mm --seed 1337 --time --un-conc-gz run_output/rrna/{wildcards.sample}_no_rRNA.fastq.gz 2> run_output/rrna/{wildcards.sample}_no_rRNA.log; touch {output.done}"
   },
 
   "star_align": {
@@ -102,7 +65,7 @@
     },
     "threads": "THREADS",
     "resources": { "mem_mb": "MEMORY" },
-    "shell": "mkdir -p run_output/alignment/{wildcards.sample}; STAR --runThreadN {threads} --genomeDir {input.index} --readFilesIn {input.r1} {input.r2} --readFilesCommand gunzip -c --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}_ --quantMode GeneCounts --twopassMode Basic; touch {output.done}"
+    "shell": " source /etc/profile.d/modules.sh\n        module load star\n mkdir -p run_output/alignment/{wildcards.sample}; STAR --runThreadN {threads} --genomeDir {input.index} --readFilesIn {input.r1} {input.r2} --readFilesCommand gunzip -c --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}_ --quantMode GeneCounts --twopassMode Basic; touch {output.done}"
   },
 
   "prep_circtools": {
@@ -144,6 +107,6 @@
       "Nr1": "config.get('detect', {}).get('Nr1', 2)",
       "Nr2": "config.get('detect', {}).get('Nr2', 2)"
     },
-    "shell": "circtools detect @{input.samplesheet} -ss -T {threads} -an {input.annotation} -A {input.reference} -B @{input.bamlist} -D -M -G -Nr {params.Nr1} {params.Nr2} -O ./run_output/circtools_ci -k"
+    "shell": "source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n\n circtools detect @{input.samplesheet} -ss -T {threads} -an {input.annotation} -A {input.reference} -B @{input.bamlist} -D -M -G -Nr {params.Nr1} {params.Nr2} -O ./run_output/circtools_ci -k"
   }
 }

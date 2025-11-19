@@ -11,6 +11,9 @@ Usage examples:
 import argparse
 from pathlib import Path
 from snakebuilder.builder.core import build_from_config
+import os
+import yaml
+from pathlib import Path
 
 
 # -----------------------------------------------------------
@@ -18,6 +21,7 @@ from snakebuilder.builder.core import build_from_config
 # -----------------------------------------------------------
 STEP_ALIASES = {
     "processing": [
+        "check_inputs",
         "decompress_inputs",
         "fastp",
         "build_bowtie2_index",
@@ -105,8 +109,22 @@ def main():
         action="store_true",
         help="Use cloud_rules.json instead of core_rules.json"
     )
+    parser.add_argument(
+        "--species",
+        required = False,
+        choices=["hs", "mm", "gg", "dr", "rn"],
+        help = "Species choice for bowtie and star indexes (mm, hs, gg, dr, rn)",
+    )
+    parser.add_argument(
+        "--rename",
+        action="store_true",
+        help="Interactively rename samples and create symlinks"
+    )
+
 
     args = parser.parse_args()
+    
+    
 
     # -----------------------------------------------------------
     # Expand @file syntax AND alias/meta-step syntax
@@ -122,7 +140,9 @@ def main():
         config_path=config_path,
         steps=args.steps,
         outdir=args.outdir,
-        use_cloud=args.cloud
+        use_cloud=args.cloud,
+        species = args.species,
+        rename  =args.rename
     )
 
     print(f"✅ Snakefile successfully written to: {snakefile_path}")

@@ -128,16 +128,16 @@ This ensures the workflow remains self-contained while reminding the user to edi
 
 ---
 
-# 🧱 Example: Full Pipeline
+# Example: Full Pipeline
 
 ```bash
-snakebuild     --steps @full_pipeline.txt     --outdir workflow_run
+snakebuild     --steps @full_pipeline.txt     --outdir workflow_run --species mm
 ```
 
 Where `full_pipeline.txt` contains:
 
 ```
-decompress_inputs
+check_inputs
 fastp
 build_bowtie2_index
 remove_rrna
@@ -146,6 +146,13 @@ star_align
 prep_circtools
 detect
 ```
+
+This will generate a circtools processing and detection pipeline for a given species using a generated config file that references genomes in BioDB.
+
+```
+snakemake --rerun-incomplete --snakefile ./Snakefile  --configfile ./config.yaml --cores 16 -p
+'''
+
 
 This will generate a snakefile that cam be used to process genomic data and detect circular RNAs!
 

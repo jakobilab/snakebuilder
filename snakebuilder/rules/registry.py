@@ -204,7 +204,7 @@ def get_rule(name: str) -> str:
     if shell_code:
         shell_text = _escape_awk_braces(textwrap.dedent(shell_code).rstrip())
         lines.append(f"{indent1}shell:")
-        lines.append(f'{indent2}r"""{shell_text}"""')
+        lines.append(f'{indent2}"""{shell_text}"""')
         return "\n".join(lines)
 
     # no action block

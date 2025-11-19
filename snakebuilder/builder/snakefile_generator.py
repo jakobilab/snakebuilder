@@ -26,13 +26,10 @@ THREADS = config.get("threads", 4)
 MEMORY = config.get("memory", 4000)
 RUN_DIR = Path(config.get("run_dir", "run_output")).resolve()
 
+# Accumulator, filled programmatically below
 ALL_RULE_INPUTS = []
-
-rule all:
-        input: ALL_RULE_INPUTS
-        run:
-            pass
 """)
+
 
 # --------- Cloud header (minimal) ----------
 HEADER_CLOUD = dedent("""
@@ -245,10 +242,37 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
 
         # Insert rule all BELOW accumulator, BEFORE rules
         parts.append(dedent("""
-rule all:
-    input:
-        ALL_RULE_INPUTS
-"""))
+        rule all:
+            input:
+                ALL_RULE_INPUTS
+        """))
+    else:
+        parts.append("\n# Accumulate outputs (core mode)\nALL_RULE_INPUTS = []\n")
+
+        for step in steps:
+            if step == "check_inputs":
+                parts.append("ALL_RULE_INPUTS.append('run_output/check.done')\n")
+            elif step == "fastp":
+                parts.append("ALL_RULE_INPUTS += expand('run_output/fastp/{sample}/fastp.done', sample=SAMPLES)\n")
+            elif step == "remove_rrna":
+                parts.append("ALL_RULE_INPUTS += expand('run_output/rrna/{sample}/remove_rrna.done', sample=SAMPLES)\n")
+            elif step == "star_align":
+                parts.append("ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/star.done', sample=SAMPLES)\n")
+            elif step == "prep_circtools":
+                parts.append("ALL_RULE_INPUTS.append('run_output/alignment/processing.done')\n")
+            elif step == "detect":
+                parts.append("ALL_RULE_INPUTS.append('run_output/circtools_ci/detect.done')\n")
+
+                
+                    
+        parts.append(dedent("""
+        rule all:
+            input:
+                ALL_RULE_INPUTS
+        """))
+
+
+        
 
     # Append actual rules at end
     from snakebuilder.rules.registry import load_rules
