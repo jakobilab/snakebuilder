@@ -11,5 +11,6 @@ snakebuilder.egg-info/top_level.txt
 snakebuilder/builder/core.py
 snakebuilder/builder/snakefile_generator.py
 snakebuilder/rules/__init__.py
+snakebuilder/rules/cloud_rules.json
 snakebuilder/rules/core_rules.json
 snakebuilder/rules/registry.py

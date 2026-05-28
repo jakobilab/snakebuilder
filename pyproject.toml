@@ -20,4 +20,4 @@ dev = ["pytest", "black"]
 snakebuilder = "snakebuilder.cli:main"
 
 [tool.setuptools.package-data]
-"snakebuilder.rules" = ["core_rules.json"]
+"snakebuilder.rules" = ["*.json"]

@@ -8,24 +8,30 @@ from pathlib import Path
 import re
 
 RULESET = "core"
+_RULES_OVERRIDE_PATH: Path | None = None  # set via select_ruleset(rules_path=...)
 
 
 # ----------------------------------------------------------
 # Select active ruleset ("core" or "cloud")
 # ----------------------------------------------------------
-def select_ruleset(mode: str):
-    global RULESET
+def select_ruleset(mode: str, rules_path: str | Path | None = None):
+    global RULESET, _RULES_OVERRIDE_PATH
     if mode not in ("core", "cloud"):
         raise ValueError(f"Invalid ruleset: {mode}")
     RULESET = mode
+    _RULES_OVERRIDE_PATH = Path(rules_path) if rules_path else None
 
 
 # ----------------------------------------------------------
 # Load rule definitions from the appropriate file
 # ----------------------------------------------------------
 def load_rules() -> dict:
-    filename = "cloud_rules.json" if RULESET == "cloud" else "core_rules.json"
-    path = Path(__file__).parent / filename
+    # Use override path if set (e.g. by HPC agent pointing to repo copy)
+    if _RULES_OVERRIDE_PATH is not None:
+        path = _RULES_OVERRIDE_PATH
+    else:
+        filename = "cloud_rules.json" if RULESET == "cloud" else "core_rules.json"
+        path = Path(__file__).parent / filename
 
     if not path.exists():
         raise FileNotFoundError(f"Rule registry not found: {path}")
@@ -54,6 +60,7 @@ def _format_value(v: str) -> str:
         inner.startswith("expand(") or
         inner.startswith("Path(") or
         inner.startswith("str(") or
+        inner.startswith("touch(") or
         inner.startswith("wildcards.") or
         inner.startswith("PRIMER_CONFIG") or
         inner.startswith("DETECT_CONFIG") or
@@ -125,9 +132,7 @@ def get_rule(name: str) -> str:
     # ----------------------------------------------------------
     condition = rule.get("condition")
     if condition:
-        lines.append(f"if {condition}:")
-        lines.append("    fasta_path = config['fasta']")
-        lines.append("    gtf_path   = config['gtf']")
+        lines.append(condition)   # emit verbatim — colon and variable assignment already in the string
         lines.append("")
 
         base_indent = " " * 4
