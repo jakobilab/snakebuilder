@@ -34,7 +34,7 @@ pip install snakebuilder
 Or from source:
 
 ```bash
-git clone https://github.com/<your-org>/snakebuilder.git
+git clone https://github.com/jakobilab/snakebuilder.git
 cd snakebuilder
 pip install -e .
 ```
