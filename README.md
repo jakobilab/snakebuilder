@@ -151,7 +151,7 @@ This will generate a circtools processing and detection pipeline for a given spe
 
 ```
 snakemake --rerun-incomplete --snakefile ./Snakefile  --configfile ./config.yaml --cores 16 -p
-'''
+```
 
 
 This will generate a snakefile that cam be used to process genomic data and detect circular RNAs!
