@@ -140,14 +140,11 @@ def apply_species_defaults(config, species_key):
     sp = SPECIES_DB[species_key]
     base = Path(sp["base"])
 
-    # ensure input section exists
-    config.setdefault("inputs", {})
-
     # major paths
     fasta_path = base / sp["fasta"]
     gtf_path   = base / sp["gtf"]
 
-    config["inputs"].update({
+    config.update({
         "fasta": str(fasta_path),
         "gtf": str(gtf_path),
         "star_index_path": str(base / sp["star"]),
@@ -191,14 +188,12 @@ DEFAULT_PLACEHOLDER_CONFIG = {
     "run_dir": "run_output",
 
     # All placeholder paths — user *must* change these
-    "inputs": {
-        "fasta_gz": "REPLACE_ME_genome.fa.gz",
-        "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
-        "fasta": "REPLACE_ME_genome.fa",
-        "gtf": "REPLACE_ME_annotation.gtf",
-        "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
-        "star_index_path": "REPLACE_ME_star_index",
-    },
+    "fasta_gz": "REPLACE_ME_genome.fa.gz",
+    "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
+    "fasta": "REPLACE_ME_genome.fa",
+    "gtf": "REPLACE_ME_annotation.gtf",
+    "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
+    "star_index_path": "REPLACE_ME_star_index",
 
     "samples": {
         "sample1": {
@@ -314,4 +309,3 @@ def build_from_config(
             print("ℹ Using existing config — not writing new config.yaml")
 
     return snakefile_path
-
