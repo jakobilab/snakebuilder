@@ -106,6 +106,28 @@ def _escape_awk_braces(text: str) -> str:
 
 
 
+# Render a fully commented-out version of a rule block
+# ----------------------------------------------------------
+def _comment_out(rule_text: str, rule_name: str, reason: str | None) -> str:
+    """
+    Prefix every line of an already-rendered rule block with '#' so it stays
+    visible in the generated Snakefile but is inert as far as Snakemake is
+    concerned. Used for rules disabled via "disabled": true in the registry
+    (e.g. index-building rules that are no longer supposed to run because
+    the indices are supplied pre-built elsewhere).
+    """
+    header = f"# --- rule '{rule_name}' disabled"
+    if reason:
+        header += f": {reason}"
+    header += " ---"
+
+    commented = [
+        "#" if not line.strip() else f"# {line}"
+        for line in rule_text.split("\n")
+    ]
+    return "\n".join([header] + commented)
+
+
 # ----------------------------------------------------------
 # Render JSON → Snakemake rule block
 # ----------------------------------------------------------
@@ -118,6 +140,8 @@ def get_rule(name: str) -> str:
       - AWK escaping
       - params, input, output, resources
       - run/shell/python blocks
+      - "disabled": true → rendered as a commented-out block instead of an
+        active rule (see _comment_out)
     """
 
     rules = load_rules()
@@ -125,6 +149,7 @@ def get_rule(name: str) -> str:
         raise KeyError(f"Rule '{name}' not found in registry.")
 
     rule = rules[name]
+    disabled = bool(rule.get("disabled"))
     lines = []
 
     # ----------------------------------------------------------
@@ -195,22 +220,28 @@ def get_rule(name: str) -> str:
         lines.append(f"{indent1}run:")
         for line in textwrap.dedent(python_code).rstrip().split("\n"):
             lines.append(f"{indent2}{line}")
-        return "\n".join(lines)
+        rule_text = "\n".join(lines)
 
     # python+shell hybrid (run:)
-    if run_code:
+    elif run_code:
         run_text = _escape_awk_braces(textwrap.dedent(run_code).rstrip())
         lines.append(f"{indent1}run:")
         for line in run_text.split("\n"):
             lines.append(f"{indent2}{line}")
-        return "\n".join(lines)
+        rule_text = "\n".join(lines)
 
     # pure shell
-    if shell_code:
+    elif shell_code:
         shell_text = _escape_awk_braces(textwrap.dedent(shell_code).rstrip())
         lines.append(f"{indent1}shell:")
         lines.append(f'{indent2}"""{shell_text}"""')
-        return "\n".join(lines)
+        rule_text = "\n".join(lines)
 
     # no action block
-    return "\n".join(lines)
+    else:
+        rule_text = "\n".join(lines)
+
+    if disabled:
+        return _comment_out(rule_text, rule["name"], rule.get("disabled_reason"))
+
+    return rule_text

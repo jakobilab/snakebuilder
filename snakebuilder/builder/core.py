@@ -144,14 +144,10 @@ SPECIES_DB = {
 #   <genomes_root>/<id>/annotation.gtf
 #   <genomes_root>/<id>/metadata.json
 #   <genomes_root>/<id>/index/{star_index, bowtie2_index, bwa_index.*, hisat2_index.*}
-# Indices are pre-built and already carry their own *.done markers, so pointing
-# star_index_path / bowtie2_index_path here means build_star_index /
-# build_bowtie2_index just no-op (same as the existing bwa/hisat2 rules do).
+
 GENOME_CATALOG_ROOT = Path(os.environ.get("CIRCTOOLS_GENOMES_DIR", "/app/data/genomes"))
 
-# Species shorthand (as used by SPECIES_DB / --species) -> the string to match
-# against a catalog entry's metadata.json ("name", "common_name", "taxon_id",
-# or any of its "aliases").
+
 SPECIES_CATALOG_QUERY = {
     "hs": "homo_sapiens",
     "mm": "mus_musculus",
@@ -248,12 +244,7 @@ def apply_species_defaults(config, species_key):
             "hisat2_index_path": str(base / sp["hisat2"]),
         })
 
-    # NOTE: no rrna_index_prefix key needed — remove_rrna aligns against the
-    # same bowtie2_index_path index built by build_bowtie2_index (confirmed
-    # against the real pipeline: params.index_prefix is derived directly as
-    # f"{config['bowtie2_index_path']}/reference_index", not a separate config
-    # value). There is no dedicated rRNA reference in the genome catalog.
-
+  
     # default compute settings
     config.setdefault("memory", 16000)
     config.setdefault("threads", 8)

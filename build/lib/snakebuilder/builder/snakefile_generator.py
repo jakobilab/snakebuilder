@@ -394,10 +394,14 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
     rules = load_rules()
 
     # In cloud mode, "processing" expands to the full set of alignment sub-rules.
-    # fastp -> build_bowtie2_index -> remove_rrna run ahead of STAR so reads are
-    # trimmed and rRNA-depleted before alignment (restored — see star_align's
-    # input, which now consumes remove_rrna's output instead of the raw sample
-    # fastqs, and remove_rrna's input, which consumes fastp's output).
+    # fastp -> remove_rrna run ahead of STAR so reads are trimmed and
+    # rRNA-depleted before alignment (see star_align's input, which consumes
+    # remove_rrna's output instead of the raw sample fastqs, and remove_rrna's
+    # input, which consumes fastp's output). build_bowtie2_index / build_star_index
+    # are kept in this list so they still render (commented out — see "disabled"
+    # in core_rules.json) at the point they used to run; remove_rrna / star_align
+    # now depend directly on the real, pre-built index files instead of a .done
+    # marker, so the dependency chain still holds without those rules running.
     PROCESSING_SUB_RULES = [
         "decompress_inputs",
         "fastp",
@@ -411,9 +415,12 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
         "prep_circtools_finalize",
     ]
 
-    # Always emit index-build rules (they have if-not-exists guards so they're
-    # skipped at DAG time when indices are already built). ciriquant depends on
-    # their done-files via ancient() so it runs either way.
+    # build_bwa_index / build_hisat2_index are still listed here so they appear
+    # (commented out — see "disabled" in core_rules.json) alongside the rest of
+    # the ciriquant dependency chain. Indices are supplied pre-built by the
+    # genome catalog now, so ciriquant depends directly on the real index files
+    # (bwa_index_files / hisat_index_files) rather than a .done marker no rule
+    # produces anymore.
     # build_ciriquant_filelist only needed when metatool is also running.
     CIRIQUANT_DEP_RULES = [
         "build_bwa_index",

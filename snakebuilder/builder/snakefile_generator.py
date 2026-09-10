@@ -340,9 +340,7 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
             elif step == "remove_rrna":
                 parts.append("ALL_RULE_INPUTS += expand('run_output/rrna/{sample}/remove_rrna.done', sample=SAMPLES)\n")
             elif step == "star_align":
-                # NOTE: star_align's actual declared outputs (registry) are the STAR
-                # result files themselves — there is no separate "star.done" marker —
-                # so target those directly instead of a file no rule produces.
+              
                 parts.append(
                     "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_Aligned.out.sam', sample=SAMPLES)\n"
                     "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_Chimeric.out.junction', sample=SAMPLES)\n"
@@ -393,11 +391,7 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
     from snakebuilder.rules.registry import load_rules
     rules = load_rules()
 
-    # In cloud mode, "processing" expands to the full set of alignment sub-rules.
-    # fastp -> build_bowtie2_index -> remove_rrna run ahead of STAR so reads are
-    # trimmed and rRNA-depleted before alignment (restored — see star_align's
-    # input, which now consumes remove_rrna's output instead of the raw sample
-    # fastqs, and remove_rrna's input, which consumes fastp's output).
+   
     PROCESSING_SUB_RULES = [
         "decompress_inputs",
         "fastp",
@@ -411,18 +405,14 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
         "prep_circtools_finalize",
     ]
 
-    # Always emit index-build rules (they have if-not-exists guards so they're
-    # skipped at DAG time when indices are already built). ciriquant depends on
-    # their done-files via ancient() so it runs either way.
-    # build_ciriquant_filelist only needed when metatool is also running.
+    
     CIRIQUANT_DEP_RULES = [
         "build_bwa_index",
         "build_hisat2_index",
     ] + (["build_ciriquant_filelist"] if "metatool" in steps else [])
 
     # "prep_circtools" isn't a real rule key in core_rules.json/cloud_rules.json —
-    # it's a convenience name that should expand to both underlying rules.
-    # (Re-added — this got dropped in the merge.)
+   
     PREP_CIRCTOOLS_SUB_RULES = [
         "prep_circtools_sample",
         "prep_circtools_finalize",

@@ -19,6 +19,8 @@
   "build_star_index": {
     "name": "build_star_index",
     "description": "Build STAR genome index.",
+    "disabled": true,
+    "disabled_reason": "indices are pre-built and shipped by the genome catalog (core.py apply_species_defaults/find_genome_in_catalog); re-enable if a species must be indexed at runtime",
     "input": {
       "fasta": "config['fasta']",
       "gtf": "config['gtf']"
@@ -41,7 +43,7 @@
     "input": {
       "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
       "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
-      "star_index_done": "config['star_index_path'] + '/star_index.done'",
+      "star_index_ready": "config['star_index_path'] + '/SAindex'",
       "gtf": "config['gtf']",
       "rrna_done": "run_output/rrna/{sample}/remove_rrna.done"
     },
@@ -68,7 +70,7 @@
     "input": {
       "unm1": "rules.star_align.output.unm1",
       "gtf": "config['gtf']",
-      "star_index_done": "config['star_index_path'] + '/star_index.done'"
+      "star_index_ready": "config['star_index_path'] + '/SAindex'"
     },
     "output": {
       "sam": "run_output/alignment/{sample}/{sample}.mate1_Aligned.out.sam",
@@ -89,7 +91,7 @@
     "input": {
       "unm2": "rules.star_align.output.unm2",
       "gtf": "config['gtf']",
-      "star_index_done": "config['star_index_path'] + '/star_index.done'"
+      "star_index_ready": "config['star_index_path'] + '/SAindex'"
     },
     "output": {
       "sam": "run_output/alignment/{sample}/{sample}.mate2_Aligned.out.sam",
@@ -173,6 +175,8 @@
   "build_bwa_index": {
     "name": "build_bwa_index",
     "description": "Build BWA genome index if it does not already exist.",
+    "disabled": true,
+    "disabled_reason": "indices are pre-built and shipped by the genome catalog; re-enable if a species must be indexed at runtime",
     "condition": "_bwa_done = os.path.join(os.path.dirname(config['reference']['bwa_index']), 'bwa_index.done')\nif not os.path.exists(_bwa_done):",
     "input": {
       "fasta": "config['reference']['fasta']"
@@ -193,6 +197,8 @@
   "build_hisat2_index": {
     "name": "build_hisat2_index",
     "description": "Build HISAT2 genome index if it does not already exist.",
+    "disabled": true,
+    "disabled_reason": "indices are pre-built and shipped by the genome catalog; re-enable if a species must be indexed at runtime",
     "condition": "_hisat_done = os.path.join(os.path.dirname(config['reference']['hisat_index']), 'hisat2_index.done')\nif not os.path.exists(_hisat_done):",
     "input": {
       "fasta": "config['reference']['fasta']"
@@ -217,8 +223,8 @@
     "input": {
       "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
       "r2": "lambda wc: config['samples'][wc.sample]['fastq2']",
-      "bwa_index_done": "os.path.join(os.path.dirname(config['reference']['bwa_index']), 'bwa_index.done')",
-      "hisat_index_done": "os.path.join(os.path.dirname(config['reference']['hisat_index']), 'hisat2_index.done')"
+      "bwa_index_files": "config['reference']['bwa_index'] + '.bwt'",
+      "hisat_index_files": "config['reference']['hisat_index'] + '.1.ht2'"
     },
     "output": {
       "ciri": "\"run_output/ciriquant/{sample}/circ/{sample}.ciri\"",
@@ -480,6 +486,8 @@
   "build_bowtie2_index": {
     "name": "build_bowtie2_index",
     "description": "Build the Bowtie2 genome index used for rRNA depletion, skipped if already present (e.g. shipped with the genome catalog).",
+    "disabled": true,
+    "disabled_reason": "indices are pre-built and shipped by the genome catalog (core.py apply_species_defaults/find_genome_in_catalog); re-enable if a species must be indexed at runtime",
     "condition": "_bowtie2_done = os.path.join(config['bowtie2_index_path'], 'bowtie2.done')\nif not os.path.exists(_bowtie2_done):",
     "input": {
       "fasta": "config['fasta']"
@@ -503,7 +511,7 @@
     "input": {
       "r1": "run_output/fastp/{sample}_1.fastq.gz",
       "r2": "run_output/fastp/{sample}_2.fastq.gz",
-      "bowtie2_done": "config['bowtie2_index_path'] + '/bowtie2.done'"
+      "bowtie2_index_files": "expand(config['bowtie2_index_path'] + '/reference_index.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])"
     },
     "output": {
       "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
