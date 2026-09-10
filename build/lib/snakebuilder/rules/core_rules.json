@@ -19,8 +19,6 @@
   "build_star_index": {
     "name": "build_star_index",
     "description": "Build STAR genome index.",
-    "disabled": true,
-    "disabled_reason": "indices are pre-built and shipped by the genome catalog (core.py apply_species_defaults/find_genome_in_catalog); re-enable if a species must be indexed at runtime",
     "input": {
       "fasta": "config['fasta']",
       "gtf": "config['gtf']"
@@ -175,8 +173,6 @@
   "build_bwa_index": {
     "name": "build_bwa_index",
     "description": "Build BWA genome index if it does not already exist.",
-    "disabled": true,
-    "disabled_reason": "indices are pre-built and shipped by the genome catalog; re-enable if a species must be indexed at runtime",
     "condition": "_bwa_done = os.path.join(os.path.dirname(config['reference']['bwa_index']), 'bwa_index.done')\nif not os.path.exists(_bwa_done):",
     "input": {
       "fasta": "config['reference']['fasta']"
@@ -197,8 +193,6 @@
   "build_hisat2_index": {
     "name": "build_hisat2_index",
     "description": "Build HISAT2 genome index if it does not already exist.",
-    "disabled": true,
-    "disabled_reason": "indices are pre-built and shipped by the genome catalog; re-enable if a species must be indexed at runtime",
     "condition": "_hisat_done = os.path.join(os.path.dirname(config['reference']['hisat_index']), 'hisat2_index.done')\nif not os.path.exists(_hisat_done):",
     "input": {
       "fasta": "config['reference']['fasta']"
@@ -467,7 +461,7 @@
   },
   "fastp": {
     "name": "fastp",
-    "description": "Adapter and quality trimming of raw paired-end reads with fastp.",
+    "description": "Adapter and quality trimming of raw paired-end reads with fastp. Uses config['fastp_bin'] if set (e.g. a personal binary not yet on PATH/module system), otherwise just calls 'fastp' and assumes it's on PATH.",
     "input": {
       "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
       "r2": "lambda wc: config['samples'][wc.sample]['fastq2']"
@@ -477,24 +471,24 @@
       "r2": "run_output/fastp/{sample}_2.fastq.gz",
       "done": "run_output/fastp/{sample}/fastp.done"
     },
+    "params": {
+      "fastp_bin": "config.get('fastp_bin', 'fastp')"
+    },
     "threads": 2,
     "resources": {
       "mem_mb": 2000
     },
-    "shell": "mkdir -p run_output/fastp/{wildcards.sample}\nfastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\ntouch {output.done}"
+    "shell": "mkdir -p run_output/fastp/{wildcards.sample}\n{params.fastp_bin} -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\ntouch {output.done}"
   },
   "build_bowtie2_index": {
     "name": "build_bowtie2_index",
-    "description": "Build the Bowtie2 genome index used for rRNA depletion, skipped if already present (e.g. shipped with the genome catalog).",
-    "disabled": true,
-    "disabled_reason": "indices are pre-built and shipped by the genome catalog (core.py apply_species_defaults/find_genome_in_catalog); re-enable if a species must be indexed at runtime",
-    "condition": "_bowtie2_done = os.path.join(config['bowtie2_index_path'], 'bowtie2.done')\nif not os.path.exists(_bowtie2_done):",
+    "description": "Build the Bowtie2 genome index used for rRNA depletion, skipped if a matching index already exists in the directory (e.g. shipped with the genome catalog, under any basename). config['bowtie2_index_path'] is a DIRECTORY — the index it builds is always named 'reference_index' inside it; remove_rrna auto-detects whatever basename actually ends up there via _bowtie2_prefix().",
+    "condition": "if not glob.glob(os.path.join(config['bowtie2_index_path'], '*.1.bt2*')):",
     "input": {
       "fasta": "config['fasta']"
     },
     "output": {
-      "index_files": "expand(config['bowtie2_index_path'] + '/reference_index.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])",
-      "done": "touch(_bowtie2_done)"
+      "index_files": "expand(os.path.join(config['bowtie2_index_path'], 'reference_index.{suffix}.bt2'), suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])"
     },
     "params": {
       "idx_dir": "config['bowtie2_index_path']"
@@ -503,15 +497,15 @@
     "resources": {
       "mem_mb": 8000
     },
-    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load bowtie2\nmkdir -p {params.idx_dir}\nbowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}\ntouch {output.done}\n\"\"\")"
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load bowtie2\nmkdir -p {params.idx_dir}\nbowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}\n\"\"\")"
   },
   "remove_rrna": {
     "name": "remove_rrna",
-    "description": "Deplete ribosomal RNA reads with Bowtie2, aligning against the genome-derived Bowtie2 index (same one build_bowtie2_index produces).",
+    "description": "Deplete ribosomal RNA reads with Bowtie2, aligning against the genome-derived Bowtie2 index (same one build_bowtie2_index produces). config['bowtie2_index_path'] is a DIRECTORY — _bowtie2_prefix() auto-detects the actual index basename inside it (e.g. GRCm39_107 for a catalog-provided index, or reference_index for a freshly-built one).",
     "input": {
       "r1": "run_output/fastp/{sample}_1.fastq.gz",
       "r2": "run_output/fastp/{sample}_2.fastq.gz",
-      "bowtie2_index_files": "expand(config['bowtie2_index_path'] + '/reference_index.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])"
+      "bowtie2_index_files": "expand(_bowtie2_prefix(config['bowtie2_index_path']) + '.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])"
     },
     "output": {
       "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
@@ -519,7 +513,7 @@
       "done": "run_output/rrna/{sample}/remove_rrna.done"
     },
     "params": {
-      "index_prefix": "lambda wc: f\"{config['bowtie2_index_path']}/reference_index\""
+      "index_prefix": "_bowtie2_prefix(config['bowtie2_index_path'])"
     },
     "threads": 8,
     "resources": {

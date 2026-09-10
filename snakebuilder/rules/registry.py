@@ -77,6 +77,10 @@ def _format_value(v: str) -> str:
     if re.match(r"[A-Za-z_][A-Za-z0-9_]*\s*\.\s*get\s*\(", inner):
         return inner
 
+    # any other bare function call, e.g. _bowtie2_prefix(...), some_helper(...)
+    if re.match(r"[A-Za-z_][A-Za-z0-9_]*\s*\(", inner):
+        return inner
+
     # f-strings
     if inner.startswith("f'") or inner.startswith('f"'):
         return inner

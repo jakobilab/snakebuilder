@@ -12,11 +12,44 @@ import json
 
 from pathlib import Path
 
-FASTQ_PATTERN = re.compile(r"(.*?)(_R[12])\.fastq\.gz$")
+FASTQ_PATTERN = re.compile(
+    r"^(?P<base>.+?)"
+    r"[._](?:[Rr](?:ead)?)?(?P<num>[12])"   # _R1, _r1, _read1, _1, .R2, etc.
+    r"(?:[._]\d+)?"                          # optional trailing lane/set index, e.g. _001
+    r"\.fastq\.gz$",
+    re.IGNORECASE,
+)
 
 def detect_samples_from_fastqs(search_dir: Path = Path("."), rename: bool = False):
-    """Scan directory for paired FASTQ.gz files and return sample dict."""
+    """
+    Scan directory for paired FASTQ.gz files and return sample dict.
+
+    First looks for *.fastq.gz directly inside `search_dir`. If none are found
+    there but `search_dir` contains subdirectories, falls back to scanning one
+    level into each of those subdirectories (e.g. fastqs sitting inside
+    per-sample or per-run folders next to where the config is being built).
+    Only goes one level deep — it won't recurse further than that.
+    """
     files = list(search_dir.glob("*.fastq.gz"))
+
+    if not files:
+        subdirs = [
+            p for p in search_dir.iterdir()
+            if p.is_dir() and not p.name.startswith(".")
+        ]
+        if subdirs:
+            print(
+                f"🔎 No FASTQ.gz files directly in {search_dir}/ — "
+                f"checking one level into {len(subdirs)} subdirectory(ies) instead..."
+            )
+            files = [
+                f for f in search_dir.glob("*/*.fastq.gz")
+                if not f.parent.name.startswith(".")
+            ]
+            if files:
+                found_in = sorted({str(f.parent) for f in files})
+                print(f"✔ Found FASTQ.gz files in: {', '.join(found_in)}")
+
     samples = {}
 
     for f in files:
@@ -24,12 +57,12 @@ def detect_samples_from_fastqs(search_dir: Path = Path("."), rename: bool = Fals
         if not m:
             continue
 
-        base, read = m.group(1), m.group(2)
+        base, num = m.group("base"), m.group("num")
         samples.setdefault(base, {})
 
-        if read == "_R1":
+        if num == "1":
             samples[base]["fastq1"] = str(f)
-        elif read == "_R2":
+        elif num == "2":
             samples[base]["fastq2"] = str(f)
 
     # prune incomplete samples
@@ -91,6 +124,11 @@ def detect_samples_from_fastqs(search_dir: Path = Path("."), rename: bool = Fals
 
 # Legacy hardcoded defaults — kept as a fallback for hosts/species that
 # aren't (yet) registered in the app's genome catalog below.
+# NOTE: "bowtie2" here is just the subdirectory (relative to "base") that
+# holds the Bowtie2 index — the actual index basename inside it doesn't
+# matter, since remove_rrna auto-detects it via _bowtie2_prefix() in the
+# generated Snakefile (handles catalogs where the index is named after the
+# genome, e.g. GRCm39_107.1.bt2, as well as freshly built reference_index.*).
 SPECIES_DB = {
     "hs": {
         "name": "homo_sapiens",
@@ -107,7 +145,7 @@ SPECIES_DB = {
         "fasta": "GRCm39_107.fa",
         "gtf": "GRCm39.107.gtf",
         "star": "star",
-        "bowtie2": "bowtie2/GRCm39_107",
+        "bowtie2": "bowtie2",
         "hisat2": "hisat2"
     },
     "dr": {
@@ -200,6 +238,8 @@ def find_genome_in_catalog(query: str, catalog_root: Path = GENOME_CATALOG_ROOT)
                 "fasta": str(genome_dir / "genome.fa"),
                 "gtf": str(genome_dir / "annotation.gtf"),
                 "star_index_path": str(index_dir / "star_index"),
+                # A directory — remove_rrna auto-detects the actual index
+                # basename inside it via _bowtie2_prefix() in the Snakefile.
                 "bowtie2_index_path": str(index_dir / "bowtie2_index"),
                 "hisat2_index_path": str(index_dir / "hisat2_index"),
             }
@@ -378,7 +418,11 @@ def build_from_config(
 
             if not detected_samples:
                 print("❌ ERROR: No FASTQ pairs detected.")
-                print("   Expected: SAMPLE_R1.fastq.gz and SAMPLE_R2.fastq.gz")
+                print(
+                    "   Expected pairs like SAMPLE_R1.fastq.gz / SAMPLE_R2.fastq.gz, "
+                    "SAMPLE_1.fastq.gz / SAMPLE_2.fastq.gz (SRA-style), or "
+                    "SAMPLE_R1_001.fastq.gz / SAMPLE_R2_001.fastq.gz (Illumina bcl2fastq-style)."
+                )
                 raise SystemExit(1)
 
             print(f"✔ Found {len(detected_samples)} samples")
