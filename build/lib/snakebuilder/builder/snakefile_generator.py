@@ -130,6 +130,14 @@ if DETECT_GTF and DETECT_FASTA:
 ALIGN_OUTPUT = []
 if SAMPLES:
     ALIGN_OUTPUT += expand(
+        "run_output/fastp/{sample}/fastp.done",
+        sample=SAMPLES
+    )
+    ALIGN_OUTPUT += expand(
+        "run_output/rrna/{sample}/remove_rrna.done",
+        sample=SAMPLES
+    )
+    ALIGN_OUTPUT += expand(
         "run_output/alignment/{sample}/{sample}_Aligned.out.sam",
         sample=SAMPLES
     )
@@ -261,6 +269,10 @@ SIRNA_CONF = config.get("sirna", {})
 SIRNA_OUTPUT = []
 if SIRNA_CONF.get("gtf") and SIRNA_CONF.get("fasta") and SIRNA_CONF.get("organism"):
     SIRNA_OUTPUT = ["run_output/sirna_output/.sirna_done"]
+    
+SIRNA_GTF = SIRNA_CONF.get("gtf", "")
+SIRNA_FASTA = SIRNA_CONF.get("fasta", "")
+SIRNA_ORGANISM = SIRNA_CONF.get("organism", "")
 """)
 }
 
@@ -328,15 +340,25 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
             elif step == "remove_rrna":
                 parts.append("ALL_RULE_INPUTS += expand('run_output/rrna/{sample}/remove_rrna.done', sample=SAMPLES)\n")
             elif step == "star_align":
-                parts.append("ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/star.done', sample=SAMPLES)\n")
+                # NOTE: star_align's actual declared outputs (registry) are the STAR
+                # result files themselves — there is no separate "star.done" marker —
+                # so target those directly instead of a file no rule produces.
+                parts.append(
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_Aligned.out.sam', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_Chimeric.out.junction', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_SJ.out.tab', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}_Log.final.out', sample=SAMPLES)\n"
+                )
             elif step == "star_align_mate1":
                 parts.append(
-                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/star.mate1.done', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}.mate1_Aligned.out.sam', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}.mate1_Chimeric.out.junction', sample=SAMPLES)\n"
                 )
 
             elif step == "star_align_mate2":
                 parts.append(
-                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/star.mate2.done', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}.mate2_Aligned.out.sam', sample=SAMPLES)\n"
+                    "ALL_RULE_INPUTS += expand('run_output/alignment/{sample}/{sample}.mate2_Chimeric.out.junction', sample=SAMPLES)\n"
                 )
 
             elif step == "prep_circtools":
@@ -371,9 +393,16 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
     from snakebuilder.rules.registry import load_rules
     rules = load_rules()
 
-    # In cloud mode, "processing" expands to the full set of alignment sub-rules
+    # In cloud mode, "processing" expands to the full set of alignment sub-rules.
+    # fastp -> build_bowtie2_index -> remove_rrna run ahead of STAR so reads are
+    # trimmed and rRNA-depleted before alignment (restored — see star_align's
+    # input, which now consumes remove_rrna's output instead of the raw sample
+    # fastqs, and remove_rrna's input, which consumes fastp's output).
     PROCESSING_SUB_RULES = [
         "decompress_inputs",
+        "fastp",
+        "build_bowtie2_index",
+        "remove_rrna",
         "build_star_index",
         "star_align",
         "star_align_mate1",

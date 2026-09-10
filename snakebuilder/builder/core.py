@@ -8,6 +8,7 @@ from pathlib import Path
 from snakebuilder.builder.snakefile_generator import generate_snakefile
 import re
 import os
+import json
 
 from pathlib import Path
 
@@ -88,6 +89,8 @@ def detect_samples_from_fastqs(search_dir: Path = Path("."), rename: bool = Fals
     return new_samples, old_samples
 
 
+# Legacy hardcoded defaults — kept as a fallback for hosts/species that
+# aren't (yet) registered in the app's genome catalog below.
 SPECIES_DB = {
     "hs": {
         "name": "homo_sapiens",
@@ -136,21 +139,123 @@ SPECIES_DB = {
     }
 }
 
+# Each entry under this root looks like:
+#   <genomes_root>/<id>/genome.fa
+#   <genomes_root>/<id>/annotation.gtf
+#   <genomes_root>/<id>/metadata.json
+#   <genomes_root>/<id>/index/{star_index, bowtie2_index, bwa_index.*, hisat2_index.*}
+# Indices are pre-built and already carry their own *.done markers, so pointing
+# star_index_path / bowtie2_index_path here means build_star_index /
+# build_bowtie2_index just no-op (same as the existing bwa/hisat2 rules do).
+GENOME_CATALOG_ROOT = Path(os.environ.get("CIRCTOOLS_GENOMES_DIR", "/app/data/genomes"))
+
+# Species shorthand (as used by SPECIES_DB / --species) -> the string to match
+# against a catalog entry's metadata.json ("name", "common_name", "taxon_id",
+# or any of its "aliases").
+SPECIES_CATALOG_QUERY = {
+    "hs": "homo_sapiens",
+    "mm": "mus_musculus",
+    "dr": "danio_rerio",
+    "gg": "gallus_gallus",
+    "rn": "rattus_norvegicus",
+}
+
+
+def find_genome_in_catalog(query: str, catalog_root: Path = GENOME_CATALOG_ROOT) -> dict | None:
+    """
+    Look up a genome under the app's real genome catalog (metadata.json per
+    directory) rather than the legacy hardcoded SPECIES_DB paths.
+
+    Matches `query` (case-insensitive) against each entry's name, common_name,
+    taxon_id, or aliases list. Returns resolved paths, or None if the catalog
+    root doesn't exist or nothing matches (caller should fall back to SPECIES_DB).
+    """
+    if not catalog_root.exists():
+        return None
+
+    q = query.strip().lower()
+
+    for genome_dir in sorted(p for p in catalog_root.iterdir() if p.is_dir()):
+        meta_path = genome_dir / "metadata.json"
+        if not meta_path.exists():
+            continue
+        try:
+            meta = json.loads(meta_path.read_text())
+        except Exception as e:
+            print(f"⚠ Skipping {meta_path}: unreadable metadata.json ({e})")
+            continue
+
+        candidates = {
+            str(meta.get("name", "")).lower(),
+            str(meta.get("common_name", "")).lower(),
+            str(meta.get("taxon_id", "")).lower(),
+        }
+        candidates |= {str(a).lower() for a in meta.get("aliases", [])}
+
+        if q in candidates:
+            index_dir = genome_dir / "index"
+            return {
+                "genome_id": genome_dir.name,
+                "display_name": meta.get("display_name", meta.get("name", genome_dir.name)),
+                "fasta": str(genome_dir / "genome.fa"),
+                "gtf": str(genome_dir / "annotation.gtf"),
+                "star_index_path": str(index_dir / "star_index"),
+                "bowtie2_index_path": str(index_dir / "bowtie2_index"),
+                "hisat2_index_path": str(index_dir / "hisat2_index"),
+            }
+
+    return None
+
+
 def apply_species_defaults(config, species_key):
-    sp = SPECIES_DB[species_key]
-    base = Path(sp["base"])
+    # ensure input section exists
+    config.setdefault("inputs", {})
 
-    # major paths
-    fasta_path = base / sp["fasta"]
-    gtf_path   = base / sp["gtf"]
+    catalog_query = SPECIES_CATALOG_QUERY.get(species_key, species_key)
+    catalog_hit = find_genome_in_catalog(catalog_query)
 
-    config.update({
-        "fasta": str(fasta_path),
-        "gtf": str(gtf_path),
-        "star_index_path": str(base / sp["star"]),
-        "bowtie2_index_path": str(base / sp["bowtie2"]),
-        "hisat2_index_path": str(base / sp["hisat2"]),
-    })
+    if catalog_hit:
+        print(
+            f"🧬 Found '{species_key}' in genome catalog "
+            f"(id={catalog_hit['genome_id']}, {catalog_hit['display_name']}). "
+            f"Using pre-built indices from {GENOME_CATALOG_ROOT}."
+        )
+        fasta_path = Path(catalog_hit["fasta"])
+        gtf_path = Path(catalog_hit["gtf"])
+        config["inputs"].update({
+            "fasta": catalog_hit["fasta"],
+            "gtf": catalog_hit["gtf"],
+            "star_index_path": catalog_hit["star_index_path"],
+            "bowtie2_index_path": catalog_hit["bowtie2_index_path"],
+            "hisat2_index_path": catalog_hit["hisat2_index_path"],
+        })
+    else:
+        if species_key not in SPECIES_DB:
+            raise ValueError(
+                f"Species '{species_key}' not found in genome catalog "
+                f"({GENOME_CATALOG_ROOT}) and no legacy default is registered for it."
+            )
+        print(
+            f"⚠ Genome catalog lookup failed for '{species_key}' "
+            f"(root={GENOME_CATALOG_ROOT}) — falling back to legacy /biodb path."
+        )
+        sp = SPECIES_DB[species_key]
+        base = Path(sp["base"])
+        fasta_path = base / sp["fasta"]
+        gtf_path = base / sp["gtf"]
+        config["inputs"].update({
+            "fasta": str(fasta_path),
+            "gtf": str(gtf_path),
+            "star_index_path": str(base / sp["star"]),
+            "bowtie2_index_path": str(base / sp["bowtie2"]),
+            "hisat2_index_path": str(base / sp["hisat2"]),
+        })
+
+    # NOTE: no rrna_index_prefix key needed — remove_rrna aligns against the
+    # same bowtie2_index_path index built by build_bowtie2_index (confirmed
+    # against the real pipeline: params.index_prefix is derived directly as
+    # f"{config['bowtie2_index_path']}/reference_index", not a separate config
+    # value). There is no dedicated rRNA reference in the genome catalog.
 
     # default compute settings
     config.setdefault("memory", 16000)
@@ -188,12 +293,14 @@ DEFAULT_PLACEHOLDER_CONFIG = {
     "run_dir": "run_output",
 
     # All placeholder paths — user *must* change these
-    "fasta_gz": "REPLACE_ME_genome.fa.gz",
-    "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
-    "fasta": "REPLACE_ME_genome.fa",
-    "gtf": "REPLACE_ME_annotation.gtf",
-    "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
-    "star_index_path": "REPLACE_ME_star_index",
+    "inputs": {
+        "fasta_gz": "REPLACE_ME_genome.fa.gz",
+        "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
+        "fasta": "REPLACE_ME_genome.fa",
+        "gtf": "REPLACE_ME_annotation.gtf",
+        "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
+        "star_index_path": "REPLACE_ME_star_index",
+    },
 
     "samples": {
         "sample1": {

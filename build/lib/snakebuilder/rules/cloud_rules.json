@@ -1,6 +1,7 @@
 {
   "decompress_inputs": {
     "name": "decompress_inputs",
+    "condition": "if config.get('fasta_gz') and config.get('gtf_gz'):",
     "description": "Decompress FASTA and GTF files from gzip to plain text format for indexing.",
     "input": {
       "fasta_gz": "config['fasta_gz']",
@@ -19,6 +20,7 @@
   "build_star_index": {
     "name": "build_star_index",
     "description": "Build STAR genome index.",
+    "condition": "_star_done = os.path.join(os.path.dirname(config['star_index_path']), 'star_index.done')\nif not os.path.exists(_star_done):",
     "input": {
       "fasta": "config['fasta']",
       "gtf": "config['gtf']"
@@ -39,10 +41,11 @@
     "name": "star_align",
     "description": "Primary STAR alignment per sample.",
     "input": {
-      "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
-      "r2": "lambda wc: config['samples'][wc.sample]['fastq2']",
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
       "star_index_done": "config['star_index_path'] + '/star_index.done'",
-      "gtf": "config['gtf']"
+      "gtf": "config['gtf']",
+      "rrna_done": "run_output/rrna/{sample}/remove_rrna.done"
     },
     "output": {
       "sam": "run_output/alignment/{sample}/{sample}_Aligned.out.sam",
@@ -54,12 +57,13 @@
     },
     "threads": 8,
     "resources": {
-      "mem_mb": 32000
+      "mem_mb": 48000,
+      "runtime": 480
     },
     "params": {
       "star_dir": "config['star_index_path']"
     },
-    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\nmkdir -p run_output/alignment/{wildcards.sample}\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --genomeLoad NoSharedMemory \\\n --readFilesIn {input.r1} {input.r2} \\\n --readFilesCommand zcat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\nmkdir -p run_output/alignment/{wildcards.sample}\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --readFilesIn {input.r1} {input.r2} \\\n --readFilesCommand zcat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
   },
   "star_align_mate1": {
     "name": "star_align_mate1",
@@ -75,12 +79,13 @@
     },
     "threads": 8,
     "resources": {
-      "mem_mb": 32000
+      "mem_mb": 48000,
+      "runtime": 480
     },
     "params": {
       "star_dir": "config['star_index_path']"
     },
-    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\n\nmkdir -p run_output/alignment/{wildcards.sample}\n\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --genomeLoad NoSharedMemory \\\n --readFilesIn {input.unm1} \\\n --readFilesCommand cat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}.mate1_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\n\nmkdir -p run_output/alignment/{wildcards.sample}\n\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --readFilesIn {input.unm1} \\\n --readFilesCommand cat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}.mate1_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
   },
   "star_align_mate2": {
     "name": "star_align_mate2",
@@ -96,12 +101,13 @@
     },
     "threads": 8,
     "resources": {
-      "mem_mb": 32000
+      "mem_mb": 48000,
+      "runtime": 480
     },
     "params": {
       "star_dir": "config['star_index_path']"
     },
-    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\n\nmkdir -p run_output/alignment/{wildcards.sample}\n\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --genomeLoad NoSharedMemory \\\n --readFilesIn {input.unm2} \\\n --readFilesCommand cat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}.mate2_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load star/2.7.10a\n\nmkdir -p run_output/alignment/{wildcards.sample}\n\nSTAR --runThreadN {threads} \\\n --genomeDir {params.star_dir} \\\n --readFilesIn {input.unm2} \\\n --readFilesCommand cat \\\n --outFileNamePrefix run_output/alignment/{wildcards.sample}/{wildcards.sample}.mate2_ \\\n --outReadsUnmapped Fastx \\\n --outSAMattributes NH HI AS nM NM MD jM jI XS \\\n --outSJfilterOverhangMin 15 15 15 15 \\\n --outFilterMultimapNmax 20 \\\n --outFilterScoreMin 1 \\\n --outFilterMatchNminOverLread 0.7 \\\n --outFilterMismatchNmax 999 \\\n --outFilterMismatchNoverLmax 0.05 \\\n --alignIntronMin 20 \\\n --alignIntronMax 1000000 \\\n --alignMatesGapMax 1000000 \\\n --alignSJoverhangMin 15 \\\n --alignSJDBoverhangMin 10 \\\n --alignSoftClipAtReferenceEnds No \\\n --chimSegmentMin 15 \\\n --chimScoreMin 15 \\\n --chimScoreSeparation 10 \\\n --chimJunctionOverhangMin 15 \\\n --sjdbGTFfile {input.gtf} \\\n --quantMode GeneCounts \\\n --twopassMode Basic \\\n --chimOutType Junctions SeparateSAMold\n\"\"\")"
   },
   "prep_circtools_sample": {
     "name": "prep_circtools_sample",
@@ -230,9 +236,10 @@
       "outdir": "\"run_output/ciriquant/{sample}\"",
       "prefix": "lambda wc: wc.sample"
     },
-    "threads": "THREADS",
+    "threads": 8,
     "resources": {
-      "mem_mb": "MEMORY"
+      "mem_mb": 64000,
+      "runtime": 480
     },
     "run": "import yaml as _yaml\ncq_cfg = {\n    'name': config.get('organism', 'ref'),\n    'tools': {\n        'hisat2':   config['tools']['hisat2'],\n        'bwa':      config['tools']['bwa'],\n        'samtools': config['tools']['samtools'],\n        'ciri2':    config['tools']['ciri2'],\n    },\n    'reference': {\n        'fasta':       config['reference']['fasta'],\n        'gtf':         config['reference']['gtf'],\n        'bwa_index':   config['reference']['bwa_index'],\n        'hisat_index': config['reference']['hisat_index'],\n    }\n}\ncq_cfg_path = f\"{params.outdir}/ciriquant_cfg.yaml\"\nos.makedirs(params.outdir, exist_ok=True)\nwith open(cq_cfg_path, 'w') as f:\n    _yaml.dump(cq_cfg, f, default_flow_style=False)\nupdate_step_status(EXP_ID, 'ciriquant', 'running')\ntry:\n    shell(\"\"\"\n        source ~/circtools/bin/activate\n        CIRIquant -t {threads} \\\\\n                   -1 {input.r1} \\\\\n                   -2 {input.r2} \\\\\n                   --config \"\"\" + cq_cfg_path + \"\"\" \\\\\n                   -o {params.outdir} \\\\\n                   -p {params.prefix} \\\\\n                   -e {output.log}\n    \"\"\")\n    shell('touch {output.done}')\n    update_step_status(EXP_ID, 'ciriquant', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'ciriquant', 'failed')\n    raise e"
   },
@@ -400,7 +407,8 @@
     "condition": "if ENRICHMENT_GTF and ENRICHMENT_FASTA and ENRICHMENT_PREFIX and REPEATS:",
     "description": "Perform repeat enrichment analysis using circtools enrich module.",
     "input": {
-      "gtf": "\"run_output/annotation.gtf\"",
+      "gtf": "config['enrichment']['gtf']",
+      "fasta": "config['enrichment']['fasta']",
       "circ_coords": "\"run_output/circtools_ci/CircCoordinates\""
     },
     "output": {
@@ -408,14 +416,14 @@
     },
     "params": {
       "gtf_name": "lambda wildcards, input: input.gtf.split('/')[-1]",
-      "gtf_mount": "lambda wildcards, input: f\"{input.gtf}:/data/\" + input.gtf.split('/')[-1]",
-      "repeats": "\" \".join(REPEATS)"
+      "repeats": "\" \".join(REPEATS)",
+      "organism": "config['enrichment']['prefix']"
     },
     "threads": "THREADS",
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "update_step_status(EXP_ID, 'enrichment', 'running')\n\ntry:\n    shell(\"\"\"\n        mkdir -p run_output/enrich run_output/enrich/repeats run_output/enrich/output run_output/enrich/global_tmp\n\n        echo \"[2/5] Generating genes_and_introns.gtf...\"\n        bash ../../app/scripts/circtools_generate_intron_gtf.sh {input.gtf} run_output/enrich\n\n        echo \"[3/5] Extracting repeats...\"\n        wget https://links.jakobilab.org/repeat_selection_mm10.tar.bz2 -O repeats.tar.bz2\n        tar --strip-components=1 -jxvf repeats.tar.bz2 -C run_output/enrich/repeats\n        rm repeats.tar.bz2\n\n        echo \"[4/5] Generating flanking introns...\"\n        ../../app/scripts/circtools_generate_flanking_introns.py \\\n            -g run_output/enrich/genes_and_introns.gtf \\\n            -d {input.circ_coords} \\\n            > run_output/enrich/murine_flanking_introns.bed\n\n        echo \"[5/5] Running enrich for repeats...\"\n        for repeat in {params.repeats}; do\n            tmp_dir=\"run_output/enrich/global_tmp/$repeat\"\n            mkdir -p \"$tmp_dir\"\n            csv_out=\"run_output/enrich/output/${repeat}_output_2000_iter.csv\"\n            log_out=\"run_output/enrich/output/${repeat}_enrich.log\"\n\n            circtools enrich \\\n                -c run_output/enrich/murine_flanking_introns.bed \\\n                -b run_output/enrich/repeats/${repeat}.bed \\\n                -a run_output/enrich/genes_and_introns.gtf \\\n                -g run_output/enrich/mm10.chrom.sizes \\\n                -i 2000 -I intron -p {threads} -P 1 -T 1 \\\n                -o run_output/enrich/output/ \\\n                -F ${repeat} \\\n                -t \"$tmp_dir\" \\\n                > \"$log_out\" 2>&1 || true\n\n            [ -f \"$csv_out\" ] || touch \"$csv_out\"\n        done\n    \"\"\")\n\n    update_step_status(EXP_ID, 'enrichment', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'enrichment', 'error')\n    raise e"
+    "run": "update_step_status(EXP_ID, 'enrichment', 'running')\n\ntry:\n    shell(\"\"\"\n        mkdir -p run_output/enrich run_output/enrich/repeats run_output/enrich/output run_output/enrich/global_tmp\n\n        case \"{params.organism}\" in\n            hs) BUILD=hg38 ;;\n            mm) BUILD=mm10 ;;\n            rn) BUILD=rn7 ;;\n            ss) BUILD=susScr11 ;;\n            *) BUILD=mm10 ;;\n        esac\n        echo \"Using UCSC build: $BUILD (organism={params.organism})\"\n\n        echo \"[1/5] Generating genes_and_introns.gtf...\"\n        bash ../../app/scripts/circtools_generate_intron_gtf.sh {input.gtf} run_output/enrich\n\n        echo \"[2/5] Generating chrom.sizes from genome FASTA (no fixed-species download needed)...\"\n        [ -f {input.fasta}.fai ] || samtools faidx {input.fasta}\n        cut -f1,2 {input.fasta}.fai > run_output/enrich/$BUILD.chrom.sizes\n\n        echo \"[3/5] Fetching UCSC RepeatMasker annotation for build $BUILD...\"\n        bash ../../app/scripts/circtools_fetch_repeats.sh $BUILD run_output/enrich/repeats {params.repeats}\n\n        echo \"[4/5] Generating flanking introns...\"\n        ../../app/scripts/circtools_generate_flanking_introns.py \\\n            -g run_output/enrich/genes_and_introns.gtf \\\n            -d {input.circ_coords} \\\n            > run_output/enrich/flanking_introns.bed\n\n        echo \"[5/5] Running enrich for repeats...\"\n        for repeat in {params.repeats}; do\n            tmp_dir=\"run_output/enrich/global_tmp/$repeat\"\n            mkdir -p \"$tmp_dir\"\n            csv_out=\"run_output/enrich/output/${{repeat}}_output_2000_iter.csv\"\n            log_out=\"run_output/enrich/output/${{repeat}}_enrich.log\"\n\n            circtools enrich \\\n                -c run_output/enrich/flanking_introns.bed \\\n                -b run_output/enrich/repeats/${{repeat}}.bed \\\n                -a run_output/enrich/genes_and_introns.gtf \\\n                -g run_output/enrich/$BUILD.chrom.sizes \\\n                -i 2000 -I intron -p {threads} -P 1 -T 1 \\\n                -o run_output/enrich/output/ \\\n                -F ${{repeat}} \\\n                -t \"$tmp_dir\" \\\n                > \"$log_out\" 2>&1 || true\n\n            # circtools enrich writes its real output as\n            # \"<prefix>_<iterations>_<timestamp>.csv\" (per -F/--output-filename\n            # docs: -F sets a PREFIX, not the full filename) -- it never actually\n            # produces the fixed csv_out path above on its own. Find whatever file\n            # it just wrote (newest match for this repeat) and copy it to the\n            # fixed path Snakemake tracks as this rule's real output.\n            real_csv=$(ls -t run_output/enrich/output/${{repeat}}_2000_*.csv 2>/dev/null | head -n 1) || true\n            if [ -n \"$real_csv\" ]; then\n                cp \"$real_csv\" \"$csv_out\"\n            elif [ ! -f \"$csv_out\" ]; then\n                echo \"WARNING: circtools enrich produced no output for ${{repeat}} -- see $log_out\" >&2\n                touch \"$csv_out\"\n            fi\n        done\n    \"\"\")\n\n    update_step_status(EXP_ID, 'enrichment', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'enrichment', 'error')\n    raise e"
   },
   "primer": {
     "name": "primer",
@@ -444,9 +452,9 @@
     "condition": "if SIRNA_GTF and SIRNA_FASTA and SIRNA_ORGANISM:",
     "description": "Predict siRNA targets for circRNAs using circtools sirna.",
     "input": {
-      "circ_count": "SIRNA_INPUT",
-      "gtf": "SIRNA_GTF",
-      "fasta": "SIRNA_FASTA"
+      "circ_count": "\"run_output/circtools_ci/CircRNACount\"",
+      "gtf": "config['sirna']['gtf']",
+      "fasta": "config['sirna']['fasta']"
     },
     "output": {
       "done": "\"run_output/sirna_output/.sirna_done\""
@@ -456,8 +464,68 @@
       "mem_mb": "MEMORY"
     },
     "params": {
-      "organism": "SIRNA_ORGANISM"
+      "organism": "config['sirna']['organism']"
     },
-    "run": "update_step_status(EXP_ID, 'sirna', 'running')\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        mkdir -p run_output/sirna_output\n\n        echo \"[siRNA] Running circtools siRNA for organism {params.organism}...\"\n        circtools sirna \\\n            -d {input.circ_count} \\\n            -g {input.gtf} \\\n            -f {input.fasta} \\\n            -O {params.organism} \\\n            -o run_output/sirna_output \\\n            -T \"siRNA prediction run\"\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'sirna', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'sirna', 'failed')\n    raise e"
+    "run": "update_step_status(EXP_ID, 'sirna', 'running')\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n        mkdir -p run_output/sirna_output\n\n        echo \"[siRNA] Running circtools siRNA for organism {params.organism}...\"\n        circtools sirna \\\n            -d {input.circ_count} \\\n            -g {input.gtf} \\\n            -f {input.fasta} \\\n            -O {params.organism} \\\n            -o run_output/sirna_output \\\n            -T \"siRNA prediction run\"\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'sirna', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'sirna', 'failed')\n    raise e"
+  },
+  "fastp": {
+    "name": "fastp",
+    "description": "Adapter and quality trimming of raw paired-end reads with fastp.",
+    "input": {
+      "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
+      "r2": "lambda wc: config['samples'][wc.sample]['fastq2']"
+    },
+    "output": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz",
+      "done": "run_output/fastp/{sample}/fastp.done"
+    },
+    "threads": 2,
+    "resources": {
+      "mem_mb": 2000
+    },
+    "run": "try:\n    shell(\"\"\"\n    mkdir -p run_output/fastp/{wildcards.sample}\n    /home/wjcmellon/fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\n    touch {output.done}\n    \"\"\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"processing\", \"failed\")\n    raise e"
+  },
+  "build_bowtie2_index": {
+    "name": "build_bowtie2_index",
+    "description": "Build the Bowtie2 genome index used for rRNA depletion, skipped if already present (e.g. shipped with the genome catalog).",
+    "condition": "_bowtie2_done = os.path.join(config['bowtie2_index_path'], 'bowtie2.done')\nif not os.path.exists(_bowtie2_done):",
+    "input": {
+      "fasta": "config['fasta']"
+    },
+    "output": {
+      "index_files": "expand(config['bowtie2_index_path'] + '/reference_index.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])",
+      "done": "touch(_bowtie2_done)"
+    },
+    "params": {
+      "idx_dir": "config['bowtie2_index_path']"
+    },
+    "threads": 4,
+    "resources": {
+      "mem_mb": 8000
+    },
+    "run": "try:\n    shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    module load bowtie2\n    mkdir -p {params.idx_dir}\n    bowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}\n    touch {output.done}\n    \"\"\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"processing\", \"failed\")\n    raise e"
+  },
+  "remove_rrna": {
+    "name": "remove_rrna",
+    "description": "Deplete ribosomal RNA reads with Bowtie2, aligning against the genome-derived Bowtie2 index (same one build_bowtie2_index produces).",
+    "input": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz",
+      "bowtie2_done": "config['bowtie2_index_path'] + '/bowtie2.done'"
+    },
+    "output": {
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
+      "done": "run_output/rrna/{sample}/remove_rrna.done"
+    },
+    "params": {
+      "index_prefix": "lambda wc: f\"{config['bowtie2_index_path']}/reference_index\""
+    },
+    "threads": 8,
+    "resources": {
+      "mem_mb": 32000
+    },
+    "run": "try:\n    shell(\"\"\"\n    mkdir -p run_output/rrna/{wildcards.sample}\n    source /etc/profile.d/modules.sh\n    module load bowtie2\n    bowtie2 -x {params.index_prefix} \\\n        -1 {input.r1} -2 {input.r2} \\\n        --no-unal --omit-sec-seq \\\n        --threads {threads} --mm --seed 1337 --time \\\n        --un-conc-gz run_output/rrna/{wildcards.sample}_no_rRNA.fastq.gz \\\n        2> run_output/rrna/{wildcards.sample}_no_rRNA.log\n    touch {output.done}\n    \"\"\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"processing\", \"failed\")\n    raise e"
   }
 }
