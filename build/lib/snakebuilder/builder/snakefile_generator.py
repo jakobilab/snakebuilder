@@ -420,10 +420,20 @@ def generate_snakefile(steps: list[str], use_cloud: bool = False) -> str:
         "build_hisat2_index",
     ] + (["build_ciriquant_filelist"] if "metatool" in steps else [])
 
+    # "prep_circtools" isn't a real rule key in core_rules.json/cloud_rules.json —
+    # it's a convenience name that should expand to both underlying rules.
+    # (Re-added — this got dropped in the merge.)
+    PREP_CIRCTOOLS_SUB_RULES = [
+        "prep_circtools_sample",
+        "prep_circtools_finalize",
+    ]
+
     expanded_steps = []
     for step in steps:
         if step == "processing" and use_cloud:
             expanded_steps.extend(PROCESSING_SUB_RULES)
+        elif step == "prep_circtools":
+            expanded_steps.extend(PREP_CIRCTOOLS_SUB_RULES)
         elif step == "ciriquant" and use_cloud:
             expanded_steps.extend(CIRIQUANT_DEP_RULES)
             expanded_steps.append("ciriquant")

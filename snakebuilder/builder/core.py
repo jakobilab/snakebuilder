@@ -208,9 +208,6 @@ def find_genome_in_catalog(query: str, catalog_root: Path = GENOME_CATALOG_ROOT)
 
 
 def apply_species_defaults(config, species_key):
-    # ensure input section exists
-    config.setdefault("inputs", {})
-
     catalog_query = SPECIES_CATALOG_QUERY.get(species_key, species_key)
     catalog_hit = find_genome_in_catalog(catalog_query)
 
@@ -222,7 +219,7 @@ def apply_species_defaults(config, species_key):
         )
         fasta_path = Path(catalog_hit["fasta"])
         gtf_path = Path(catalog_hit["gtf"])
-        config["inputs"].update({
+        config.update({
             "fasta": catalog_hit["fasta"],
             "gtf": catalog_hit["gtf"],
             "star_index_path": catalog_hit["star_index_path"],
@@ -243,7 +240,7 @@ def apply_species_defaults(config, species_key):
         base = Path(sp["base"])
         fasta_path = base / sp["fasta"]
         gtf_path = base / sp["gtf"]
-        config["inputs"].update({
+        config.update({
             "fasta": str(fasta_path),
             "gtf": str(gtf_path),
             "star_index_path": str(base / sp["star"]),
@@ -293,14 +290,12 @@ DEFAULT_PLACEHOLDER_CONFIG = {
     "run_dir": "run_output",
 
     # All placeholder paths — user *must* change these
-    "inputs": {
-        "fasta_gz": "REPLACE_ME_genome.fa.gz",
-        "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
-        "fasta": "REPLACE_ME_genome.fa",
-        "gtf": "REPLACE_ME_annotation.gtf",
-        "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
-        "star_index_path": "REPLACE_ME_star_index",
-    },
+    "fasta_gz": "REPLACE_ME_genome.fa.gz",
+    "gtf_gz": "REPLACE_ME_annotation.gtf.gz",
+    "fasta": "REPLACE_ME_genome.fa",
+    "gtf": "REPLACE_ME_annotation.gtf",
+    "bowtie2_index_path": "REPLACE_ME_bowtie2_index",
+    "star_index_path": "REPLACE_ME_star_index",
 
     "samples": {
         "sample1": {

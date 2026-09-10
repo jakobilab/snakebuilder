@@ -14,7 +14,7 @@
     "resources": {
       "mem_mb": 500
     },
-    "run": "try:\n    shell(\"\"\"\n        echo \"\ud83d\udddc\ufe0f Decompressing FASTA and GTF next to originals\"\n        gunzip -c {input.fasta_gz} > {output.fasta}\n        gunzip -c {input.gtf_gz}   > {output.gtf}\n    \"\"\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"processing\", \"failed\")\n    raise e"
+    "run": "shell(\"\"\"\n    echo \"🗜️ Decompressing FASTA and GTF next to originals\"\n    gunzip -c {input.fasta_gz} > {output.fasta}\n    gunzip -c {input.gtf_gz}   > {output.gtf}\n\"\"\")"
   },
   "build_star_index": {
     "name": "build_star_index",
@@ -168,7 +168,7 @@
       "temp": "run_output/circtools_ci_DCC_temp",
       "Nr": "f\"{config.get('detect', {}).get('Nr1', 1)} {config.get('detect', {}).get('Nr2', 1)}\""
     },
-    "run": "update_step_status(EXP_ID, 'detect', 'running')\ntry:\n    shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule unload circtools || true\nmodule load circtools/2.0\nmkdir -p {params.outdir}\nmkdir -p {params.temp}\ncirctools detect \\\n @{input.samplesheet} \\\n -D \\\n -an {input.annotation} \\\n -A {input.reference} \\\n -Pi \\\n -mt1 @{input.mate1} \\\n -mt2 @{input.mate2} \\\n -B @{input.bamlist} \\\n -fg \\\n -Nr {params.Nr} \\\n -G \\\n -k \\\n -O {params.outdir} \\\n -F \\\n -t {params.temp}/ \\\n -L 20 \\\n -T {threads}\nawk 'BEGIN {{FS=OFS=\"\\t\"}} NR==FNR {{key=$1 FS $2 FS $3; gene[key]=$4; next}} FNR==1 {{print \"Gene\", $0; next}} {{key=$1 FS $2 FS $3; g=(key in gene)?gene[key]:\"not_annotated\"; print g, $0}}' \\\n    {params.outdir}/CircCoordinates {params.outdir}/CircRNACount \\\n    > {output.named}\ntouch {output.done}\n\"\"\")\n    update_step_status(EXP_ID, 'detect', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'detect', 'error')\n    raise e"
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule unload circtools || true\nmodule load circtools/2.0\nmkdir -p {params.outdir}\nmkdir -p {params.temp}\ncirctools detect \\\n @{input.samplesheet} \\\n -D \\\n -an {input.annotation} \\\n -A {input.reference} \\\n -Pi \\\n -mt1 @{input.mate1} \\\n -mt2 @{input.mate2} \\\n -B @{input.bamlist} \\\n -fg \\\n -Nr {params.Nr} \\\n -G \\\n -k \\\n -O {params.outdir} \\\n -F \\\n -t {params.temp}/ \\\n -L 20 \\\n -T {threads}\nawk 'BEGIN {{FS=OFS=\"\\t\"}} NR==FNR {{key=$1 FS $2 FS $3; gene[key]=$4; next}} FNR==1 {{print \"Gene\", $0; next}} {{key=$1 FS $2 FS $3; g=(key in gene)?gene[key]:\"not_annotated\"; print g, $0}}' \\\n{params.outdir}/CircCoordinates {params.outdir}/CircRNACount \\\n> {output.named}\ntouch {output.done}\n\"\"\")"
   },
   "build_bwa_index": {
     "name": "build_bwa_index",
@@ -188,7 +188,7 @@
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "try:\n    update_step_status(EXP_ID, \"ciriquant\", \"running\")\n\n    shell(\"\"\"\n        mkdir -p {params.index_dir}\n        bwa index -a bwtsw \\\\\n                   -p {params.index_prefix} \\\\\n                   {input.fasta}\n    \"\"\")\n\nexcept Exception as e:\n    update_step_status(EXP_ID, \"ciriquant\", \"failed\")\n    raise e"
+    "run": "shell(\"\"\"\n    mkdir -p {params.index_dir}\n    bwa index -a bwtsw \\\\\n               -p {params.index_prefix} \\\\\n               {input.fasta}\n\"\"\")"
   },
   "build_hisat2_index": {
     "name": "build_hisat2_index",
@@ -208,7 +208,7 @@
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "try:\n    update_step_status(EXP_ID, \"ciriquant\", \"running\")\n\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        module load hisat2\n        mkdir -p {params.index_dir}\n        hisat2-build -p {threads} {input.fasta} {params.index_prefix}\n    \"\"\")\n\nexcept Exception as e:\n    update_step_status(EXP_ID, \"ciriquant\", \"failed\")\n    raise e"
+    "run": "shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    module load hisat2\n    mkdir -p {params.index_dir}\n    hisat2-build -p {threads} {input.fasta} {params.index_prefix}\n\"\"\")"
   },
   "ciriquant": {
     "name": "ciriquant",
@@ -233,7 +233,7 @@
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "import yaml as _yaml\ncq_cfg = {\n    'name': config.get('organism', 'ref'),\n    'tools': {\n        'hisat2':   config['tools']['hisat2'],\n        config['tools']['bwa'],\n        'samtools': config['tools']['samtools'],\n        'ciri2':    config['tools']['ciri2'],\n    },\n    'reference': {\n        'fasta':       config['reference']['fasta'],\n        'gtf':         config['reference']['gtf'],\n        'bwa_index':   config['reference']['bwa_index'],\n        'hisat_index': config['reference']['hisat_index'],\n    }\n}\ncq_cfg_path = f\"{params.outdir}/ciriquant_cfg.yaml\"\nos.makedirs(params.outdir, exist_ok=True)\nwith open(cq_cfg_path, 'w') as f:\n    _yaml.dump(cq_cfg, f, default_flow_style=False)\nupdate_step_status(EXP_ID, \"ciriquant\", \"running\")\ntry:\n    shell(\"\"\"\n        source ~/circtools/bin/activate\n        CIRIquant -t {threads} \\\\\n                   -1 {input.r1} \\\\\n                   -2 {input.r2} \\\\\n                   --config \"\"\" + cq_cfg_path + \"\"\" \\\\\n                   -o {params.outdir} \\\\\n                   -p {params.prefix} \\\\\n                   -e {output.log}\n    \"\"\")\n    shell(\"touch {output.done}\")\n    update_step_status(EXP_ID, \"ciriquant\", \"completed\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"ciriquant\", \"failed\")\n    raise e"
+    "run": "import yaml as _yaml\ncq_cfg = {\n    'name': config.get('organism', 'ref'),\n    'tools': {\n        'hisat2':   config['tools']['hisat2'],\n        'bwa':      config['tools']['bwa'],\n        'samtools': config['tools']['samtools'],\n        'ciri2':    config['tools']['ciri2'],\n    },\n    'reference': {\n        'fasta':       config['reference']['fasta'],\n        'gtf':         config['reference']['gtf'],\n        'bwa_index':   config['reference']['bwa_index'],\n        'hisat_index': config['reference']['hisat_index'],\n    }\n}\ncq_cfg_path = f\"{params.outdir}/ciriquant_cfg.yaml\"\nos.makedirs(params.outdir, exist_ok=True)\nwith open(cq_cfg_path, 'w') as f:\n    _yaml.dump(cq_cfg, f, default_flow_style=False)\nshell(\"\"\"\n    source ~/circtools/bin/activate\n    CIRIquant -t {threads} \\\\\n               -1 {input.r1} \\\\\n               -2 {input.r2} \\\\\n               --config \"\"\" + cq_cfg_path + \"\"\" \\\\\n               -o {params.outdir} \\\\\n               -p {params.prefix} \\\\\n               -e {output.log}\n\"\"\")\nshell(\"touch {output.done}\")"
   },
   "build_ciriquant_filelist": {
     "name": "build_ciriquant_filelist",
@@ -276,7 +276,7 @@
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "try:\n    update_step_status(EXP_ID, \"metatool\", \"running\")\n\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n        mkdir -p {params.outdir}\n\n        cp {input.circ_count} {params.outdir}/CircRNACount\n        cp {input.linear_count} {params.outdir}/LinearCount\n        cp {input.coordinates} {params.outdir}/CircCoordinates\n\n\n        circtools detect \\\n            -T {threads} \\\n            @{input.samplesheet} \\\n            -mt1 @{input.mate1} \\\n            -mt2 @{input.mate2} \\\n            -B @{input.bamlist} \\\n            -an {config[reference][gtf]} \\\n            -Pi -Nr {params.nr1} {params.nr2} \\\n            -A {config[reference][fasta]} \\\n            -cq -cql {input.ciriquant_list} \\\n            -O {params.outdir}\n\n        # Step 2: merge CircRNACount and CircCoordinates\n        awk 'BEGIN {FS=OFS=\"\\t\"} NR==FNR {key=$1 FS $2 FS $3; gene[$key]=$4; next} \\\n            FNR==1 {print \"Gene\", $0; next} \\\n            {key=$1 FS $2 FS $3; g=(key in gene)?gene[$key]:\"not_annotated\"; print g, $0}' \\\n            {params.outdir}/CircCoordinates {output.circ} \\\n            > {params.outdir}/CircRNACountName_Merged_Normalized.txt\n    \"\"\")\n\n    update_step_status(EXP_ID, \"metatool\", \"completed\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"metatool\", \"failed\")\n    raise e"
+    "run": "shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0.3\n    mkdir -p {params.outdir}\n\n    cp {input.circ_count} {params.outdir}/CircRNACount\n    cp {input.linear_count} {params.outdir}/LinearCount\n    cp {input.coordinates} {params.outdir}/CircCoordinates\n\n    circtools detect \\\n        -T {threads} \\\n        @{input.samplesheet} \\\n        -mt1 @{input.mate1} \\\n        -mt2 @{input.mate2} \\\n        -B @{input.bamlist} \\\n        -an {config[reference][gtf]} \\\n        -Pi -Nr {params.nr1} {params.nr2} \\\n        -A {config[reference][fasta]} \\\n        -cq -cql {input.ciriquant_list} \\\n        -O {params.outdir}\n\n    # Step 2: merge CircRNACount and CircCoordinates\n    awk 'BEGIN {FS=OFS=\"\\t\"} NR==FNR {key=$1 FS $2 FS $3; gene[$key]=$4; next} \\\n        FNR==1 {print \"Gene\", $0; next} \\\n        {key=$1 FS $2 FS $3; g=(key in gene)?gene[$key]:\"not_annotated\"; print g, $0}' \\\n        {params.outdir}/CircCoordinates {output.circ} \\\n        > {params.outdir}/CircRNACountName_Merged_Normalized.txt\n\"\"\")"
   },
   "circtest": {
     "name": "circtest",
@@ -302,7 +302,7 @@
       "fdr": "CIRCTEST_CONFIG.get('fdr', 0.9)",
       "max_fdr": "CIRCTEST_CONFIG.get('percent', 0.01)"
     },
-    "run": "try:\n    update_step_status(EXP_ID, \"circtest\", \"running\")\n\n    shell(\"\"\"\n        mkdir -p run_output/circtest_output\n        mkdir -p run_output/circtest_ci\n\n        echo \"Original groups: {params.groups}\"\n\n        # Reorder inputs based on original group vector\n        bash ../../app/scripts/reorder_circtest_inputs.sh \\\n            {input.circ} \\\n            {input.linear} \\\n            run_output/circtest_ci \\\n            \"{params.groups}\"\n\n        # Build block grouping using pure bash (no python)\n        BLOCK_GROUPS=$(echo \"{params.groups}\" | tr ',' '\\n' | sort -n | tr '\\n' ',' | sed 's/,$//')\n\n        echo \"Block groups used: $BLOCK_GROUPS\"\n\n        # Run circtest on reordered data\n        circtools circtest \\\n            -d run_output/circtest_ci/ \\\n            -c {params.columns} \\\n            -g $BLOCK_GROUPS \\\n            -l {params.labels} \\\n            -r {params.replicates} \\\n            -f {params.fdr} \\\n            -p {params.max_fdr} \\\n            -s 1 \\\n            -C 1 \\\n            -o run_output/circtest_output \\\n            -n test_output \\\n            -M bw\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, \"circtest\", \"completed\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"circtest\", \"failed\")\n    raise e"
+    "run": "shell(\"\"\"\n    mkdir -p run_output/circtest_output\n    mkdir -p run_output/circtest_ci\n\n    echo \"Original groups: {params.groups}\"\n\n    # Reorder inputs based on original group vector\n    bash ../../app/scripts/reorder_circtest_inputs.sh \\\n        {input.circ} \\\n        {input.linear} \\\n        run_output/circtest_ci \\\n        \"{params.groups}\"\n\n    # Build block grouping using pure bash (no python)\n    BLOCK_GROUPS=$(echo \"{params.groups}\" | tr ',' '\\n' | sort -n | tr '\\n' ',' | sed 's/,$//')\n\n    echo \"Block groups used: $BLOCK_GROUPS\"\n\n    # Run circtest on reordered data\n    circtools circtest \\\n        -d run_output/circtest_ci/ \\\n        -c {params.columns} \\\n        -g $BLOCK_GROUPS \\\n        -l {params.labels} \\\n        -r {params.replicates} \\\n        -f {params.fdr} \\\n        -p {params.max_fdr} \\\n        -s 1 \\\n        -C 1 \\\n        -o run_output/circtest_output \\\n        -n test_output \\\n        -M bw\n\n    touch {output.done}\n\"\"\")"
   },
   "padlock": {
     "name": "padlock",
@@ -323,7 +323,7 @@
       "gene": "config['padlock']['gene']",
       "prefix": "config['padlock']['prefix']"
     },
-    "run": "update_step_status(EXP_ID, \"padlock\", \"running\")\n\ntry:\n    shell(\"\"\"\n        set -euo pipefail\n\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n        source ~/circtools/bin/activate\n\n        mkdir -p run_output/padlock_output\n\n        circtools padlock \\\n            -f {input.fasta} \\\n            -g {input.gtf} \\\n            -O {params.prefix} \\\n            -G {params.gene} \\\n            -T {params.gene}_padlock_design \\\n            -r 1 \\\n            -b \\\n            -o run_output/padlock_output\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, \"padlock\", \"completed\")\n\nexcept Exception as e:\n    update_step_status(EXP_ID, \"padlock\", \"error\")\n    raise e"
+    "run": "shell(\"\"\"\n    set -euo pipefail\n\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0.3\n    source ~/circtools/bin/activate\n\n    mkdir -p run_output/padlock_output\n\n    circtools padlock \\\n        -f {input.fasta} \\\n        -g {input.gtf} \\\n        -O {params.prefix} \\\n        -G {params.gene} \\\n        -T {params.gene}_padlock_design \\\n        -r 1 \\\n        -b \\\n        -o run_output/padlock_output\n\n    touch {output.done}\n\"\"\")"
   },
   "reconstruct": {
     "name": "reconstruct",
@@ -346,7 +346,7 @@
       "sample": "lambda wildcards: wildcards.sample",
       "bed_mount": "config['reconstruct']['bed'] + ':/data/run_output/recon/{sample}/' + config['reconstruct']['bed'].split('/')[-1]"
     },
-    "run": "update_step_status(EXP_ID, \"reconstruct\", \"running\")\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n\n        circtools reconstruct \\\n            -D {input.circ_count} \\\n            -J {input.junction} \\\n            -B {input.bam} \\\n            -A {input.bed} \\\n            -N {params.sample} \\\n            -T tmp \\\n            -O run_output/recon/{params.sample} \\\n            -r 2 -q 2 -e 2 -p ensembl\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, \"reconstruct\", \"completed\")\nexcept Exception as e:\n    update_step_status(EXP_ID, \"reconstruct\", \"error\")\n    raise e"
+    "run": "shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0.3\n\n    circtools reconstruct \\\n        -D {input.circ_count} \\\n        -J {input.junction} \\\n        -B {input.bam} \\\n        -A {input.bed} \\\n        -N {params.sample} \\\n        -T tmp \\\n        -O run_output/recon/{params.sample} \\\n        -r 2 -q 2 -e 2 -p ensembl\n\n    touch {output.done}\n\"\"\")"
   },
   "nanopore": {
     "name": "nanopore",
@@ -368,7 +368,7 @@
       "working_dir": "os.getcwd()",
       "output_dir": "os.path.join(os.getcwd(), 'run_output/nanopore')"
     },
-    "run": "update_step_status(EXP_ID, 'nanopore', 'running')\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n        module load pblat\n\n        circtools nanopore \\\n            -r \\\n            -s {input.fastq} \\\n            -R {params.reference_root} \\\n            -C {params.genome} \\\n            -O {params.output_dir} \\\n            --threads {threads}\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'nanopore', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'nanopore', 'error')\n    raise e"
+    "run": "shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0.3\n    module load pblat\n\n    circtools nanopore \\\n        -r \\\n        -s {input.fastq} \\\n        -R {params.reference_root} \\\n        -C {params.genome} \\\n        -O {params.output_dir} \\\n        --threads {threads}\n\n    touch {output.done}\n\"\"\")"
   },
   "conservation": {
     "name": "conservation",
@@ -392,7 +392,7 @@
       "target_species": "CONSERVATION_CONFIG.get('target_species', 'hs')",
       "species_config": "CONSERVATION_CONFIG.get('species_config', '')"
     },
-    "run": "update_step_status(EXP_ID, 'conservation', 'running')\n\ntry:\n    shell(\"\"\"\n        mkdir -p run_output/conservation_output\n\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0.3\n        mkdir -p run_output/conservation_output/temp\n        source ~/circtools/bin/activate\n        export MPLBACKEND=Agg\n\n        SPECIES_CONFIG_ARG=\"\"\n        if [ -n \"{params.species_config}\" ]; then\n            SPECIES_CONFIG_ARG=\"-C {params.species_config}\"\n        fi\n\n        circtools conservation \\\n            -d {input.circ_file} \\\n            -f {input.fasta} \\\n            -g {input.gtf} \\\n            -O {params.organism} \\\n            $SPECIES_CONFIG_ARG \\\n            -G {params.genes} \\\n            -o ./run_output/conservation_output/ \\\n            -t ./run_output/conservation_output/temp/ \\\n            -TS {params.target_species} \\\n            -pairwise\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'conservation', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'conservation', 'error')\n    raise e"
+    "run": "shell(\"\"\"\n    mkdir -p run_output/conservation_output\n\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0.3\n    mkdir -p run_output/conservation_output/temp\n    source ~/circtools/bin/activate\n    export MPLBACKEND=Agg\n\n    SPECIES_CONFIG_ARG=\"\"\n    if [ -n \"{params.species_config}\" ]; then\n        SPECIES_CONFIG_ARG=\"-C {params.species_config}\"\n    fi\n\n    circtools conservation \\\n        -d {input.circ_file} \\\n        -f {input.fasta} \\\n        -g {input.gtf} \\\n        -O {params.organism} \\\n        $SPECIES_CONFIG_ARG \\\n        -G {params.genes} \\\n        -o ./run_output/conservation_output/ \\\n        -t ./run_output/conservation_output/temp/ \\\n        -TS {params.target_species} \\\n        -pairwise\n\n    touch {output.done}\n\"\"\")"
   },
   "enrichment": {
     "name": "enrichment",
@@ -414,7 +414,7 @@
     "resources": {
       "mem_mb": "MEMORY"
     },
-    "run": "update_step_status(EXP_ID, 'enrichment', 'running')\n\ntry:\n    shell(\"\"\"\n        mkdir -p run_output/enrich run_output/enrich/repeats run_output/enrich/output run_output/enrich/global_tmp\n\n        echo \"[2/5] Generating genes_and_introns.gtf...\"\n        bash ../../app/scripts/circtools_generate_intron_gtf.sh {input.gtf} run_output/enrich\n\n        echo \"[3/5] Extracting repeats...\"\n        wget https://links.jakobilab.org/repeat_selection_mm10.tar.bz2 -O repeats.tar.bz2\n        tar --strip-components=1 -jxvf repeats.tar.bz2 -C run_output/enrich/repeats\n        rm repeats.tar.bz2\n\n        echo \"[4/5] Generating flanking introns...\"\n        ../../app/scripts/circtools_generate_flanking_introns.py \\\n            -g run_output/enrich/genes_and_introns.gtf \\\n            -d {input.circ_coords} \\\n            > run_output/enrich/murine_flanking_introns.bed\n\n        echo \"[5/5] Running enrich for repeats...\"\n        for repeat in {params.repeats}; do\n            tmp_dir=\"run_output/enrich/global_tmp/$repeat\"\n            mkdir -p \"$tmp_dir\"\n            csv_out=\"run_output/enrich/output/${repeat}_output_2000_iter.csv\"\n            log_out=\"run_output/enrich/output/${repeat}_enrich.log\"\n\n            circtools enrich \\\n                -c run_output/enrich/murine_flanking_introns.bed \\\n                -b run_output/enrich/repeats/${repeat}.bed \\\n                -a run_output/enrich/genes_and_introns.gtf \\\n                -g run_output/enrich/mm10.chrom.sizes \\\n                -i 2000 -I intron -p {threads} -P 1 -T 1 \\\n                -o run_output/enrich/output/ \\\n                -F ${repeat} \\\n                -t \"$tmp_dir\" \\\n                > \"$log_out\" 2>&1 || true\n\n            [ -f \"$csv_out\" ] || touch \"$csv_out\"\n        done\n    \"\"\")\n\n    update_step_status(EXP_ID, 'enrichment', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'enrichment', 'error')\n    raise e"
+    "run": "shell(\"\"\"\n    mkdir -p run_output/enrich run_output/enrich/repeats run_output/enrich/output run_output/enrich/global_tmp\n\n    echo \"[2/5] Generating genes_and_introns.gtf...\"\n    bash ../../app/scripts/circtools_generate_intron_gtf.sh {input.gtf} run_output/enrich\n\n    echo \"[3/5] Extracting repeats...\"\n    wget https://links.jakobilab.org/repeat_selection_mm10.tar.bz2 -O repeats.tar.bz2\n    tar --strip-components=1 -jxvf repeats.tar.bz2 -C run_output/enrich/repeats\n    rm repeats.tar.bz2\n\n    echo \"[4/5] Generating flanking introns...\"\n    ../../app/scripts/circtools_generate_flanking_introns.py \\\n        -g run_output/enrich/genes_and_introns.gtf \\\n        -d {input.circ_coords} \\\n        > run_output/enrich/murine_flanking_introns.bed\n\n    echo \"[5/5] Running enrich for repeats...\"\n    for repeat in {params.repeats}; do\n        tmp_dir=\"run_output/enrich/global_tmp/$repeat\"\n        mkdir -p \"$tmp_dir\"\n        csv_out=\"run_output/enrich/output/${repeat}_output_2000_iter.csv\"\n        log_out=\"run_output/enrich/output/${repeat}_enrich.log\"\n\n        circtools enrich \\\n            -c run_output/enrich/murine_flanking_introns.bed \\\n            -b run_output/enrich/repeats/${repeat}.bed \\\n            -a run_output/enrich/genes_and_introns.gtf \\\n            -g run_output/enrich/mm10.chrom.sizes \\\n            -i 2000 -I intron -p {threads} -P 1 -T 1 \\\n            -o run_output/enrich/output/ \\\n            -F ${repeat} \\\n            -t \"$tmp_dir\" \\\n            > \"$log_out\" 2>&1 || true\n\n        [ -f \"$csv_out\" ] || touch \"$csv_out\"\n    done\n\"\"\")"
   },
   "primer": {
     "name": "primer",
@@ -436,7 +436,7 @@
       "genes": "' '.join(config['primer']['genes'])",
       "prefix": "config['primer']['prefix']"
     },
-    "run": "update_step_status(EXP_ID, 'primer', 'running')\n\ntry:\n    shell(\"\"\"\n        set -euo pipefail\n\n        source /etc/profile.d/modules.sh\n        module unload circtools || true\n        module load circtools/2.0\n\n        mkdir -p run_output/primer_output\n\n        GENES=\"{params.genes}\"\n\n        for gene in $GENES; do\n\n            awk -F '\\t' \"NR==1 || \\$4 == \\\"$gene\\\"\" \\\n                run_output/circtools_ci/CircCoordinates \\\n                > run_output/primer_output/CircCoordinates_${{gene}}.txt\n\n            circtools primex \\\n                -d run_output/primer_output/CircCoordinates_${{gene}}.txt \\\n                -f {input.fasta} \\\n                -g {input.gtf} \\\n                -T ${{gene}}_primer_report \\\n                -O mm \\\n                -o run_output/primer_output/\n\n        done\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'primer', 'completed')\n\nexcept Exception as e:\n    update_step_status(EXP_ID, 'primer', 'error')\n    raise e"
+    "run": "shell(\"\"\"\n    set -euo pipefail\n\n    source /etc/profile.d/modules.sh\n    module unload circtools || true\n    module load circtools/2.0\n\n    mkdir -p run_output/primer_output\n\n    GENES=\"{params.genes}\"\n\n    for gene in $GENES; do\n\n        awk -F '\\t' \"NR==1 || \\$4 == \\\"$gene\\\"\" \\\n            run_output/circtools_ci/CircCoordinates \\\n            > run_output/primer_output/CircCoordinates_${{gene}}.txt\n\n        circtools primex \\\n            -d run_output/primer_output/CircCoordinates_${{gene}}.txt \\\n            -f {input.fasta} \\\n            -g {input.gtf} \\\n            -T ${{gene}}_primer_report \\\n            -O mm \\\n            -o run_output/primer_output/\n\n    done\n\n    touch {output.done}\n\"\"\")"
   },
   "sirna": {
     "name": "sirna",
@@ -457,7 +457,7 @@
     "params": {
       "organism": "SIRNA_ORGANISM"
     },
-    "run": "update_step_status(EXP_ID, 'sirna', 'running')\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        mkdir -p run_output/sirna_output\n\n        echo \"[siRNA] Running circtools siRNA for organism {params.organism}...\"\n        circtools sirna \\\n            -d {input.circ_count} \\\n            -g {input.gtf} \\\n            -f {input.fasta} \\\n            -O {params.organism} \\\n            -o run_output/sirna_output \\\n            -T \"siRNA prediction run\"\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'sirna', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'sirna', 'failed')\n    raise e"
+    "run": "shell(\"\"\"\n    source /etc/profile.d/modules.sh\n    mkdir -p run_output/sirna_output\n\n    echo \"[siRNA] Running circtools siRNA for organism {params.organism}...\"\n    circtools sirna \\\n        -d {input.circ_count} \\\n        -g {input.gtf} \\\n        -f {input.fasta} \\\n        -O {params.organism} \\\n        -o run_output/sirna_output \\\n        -T \"siRNA prediction run\"\n\n    touch {output.done}\n\"\"\")"
   },
   "fastp": {
     "name": "fastp",
@@ -475,7 +475,7 @@
     "resources": {
       "mem_mb": 2000
     },
-    "shell": "mkdir -p run_output/fastp/{wildcards.sample}\n/home/wjcmellon/fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\ntouch {output.done}"
+    "shell": "mkdir -p run_output/fastp/{wildcards.sample}\nfastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\ntouch {output.done}"
   },
   "build_bowtie2_index": {
     "name": "build_bowtie2_index",
