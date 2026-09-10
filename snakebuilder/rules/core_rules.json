@@ -39,10 +39,11 @@
     "name": "star_align",
     "description": "Primary STAR alignment per sample.",
     "input": {
-      "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
-      "r2": "lambda wc: config['samples'][wc.sample]['fastq2']",
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
       "star_index_done": "config['star_index_path'] + '/star_index.done'",
-      "gtf": "config['gtf']"
+      "gtf": "config['gtf']",
+      "rrna_done": "run_output/rrna/{sample}/remove_rrna.done"
     },
     "output": {
       "sam": "run_output/alignment/{sample}/{sample}_Aligned.out.sam",
@@ -457,5 +458,65 @@
       "organism": "SIRNA_ORGANISM"
     },
     "run": "update_step_status(EXP_ID, 'sirna', 'running')\n\ntry:\n    shell(\"\"\"\n        source /etc/profile.d/modules.sh\n        mkdir -p run_output/sirna_output\n\n        echo \"[siRNA] Running circtools siRNA for organism {params.organism}...\"\n        circtools sirna \\\n            -d {input.circ_count} \\\n            -g {input.gtf} \\\n            -f {input.fasta} \\\n            -O {params.organism} \\\n            -o run_output/sirna_output \\\n            -T \"siRNA prediction run\"\n\n        touch {output.done}\n    \"\"\")\n\n    update_step_status(EXP_ID, 'sirna', 'completed')\nexcept Exception as e:\n    update_step_status(EXP_ID, 'sirna', 'failed')\n    raise e"
+  },
+  "fastp": {
+    "name": "fastp",
+    "description": "Adapter and quality trimming of raw paired-end reads with fastp.",
+    "input": {
+      "r1": "lambda wc: config['samples'][wc.sample]['fastq1']",
+      "r2": "lambda wc: config['samples'][wc.sample]['fastq2']"
+    },
+    "output": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz",
+      "done": "run_output/fastp/{sample}/fastp.done"
+    },
+    "threads": 2,
+    "resources": {
+      "mem_mb": 2000
+    },
+    "shell": "mkdir -p run_output/fastp/{wildcards.sample}\n/home/wjcmellon/fastp -i {input.r1} -I {input.r2} -o {output.r1} -O {output.r2} --adapter_sequence AGATCGGAAGAG --qualified_quality_phred 28 --length_required 30 --thread {threads}\ntouch {output.done}"
+  },
+  "build_bowtie2_index": {
+    "name": "build_bowtie2_index",
+    "description": "Build the Bowtie2 genome index used for rRNA depletion, skipped if already present (e.g. shipped with the genome catalog).",
+    "condition": "_bowtie2_done = os.path.join(config['bowtie2_index_path'], 'bowtie2.done')\nif not os.path.exists(_bowtie2_done):",
+    "input": {
+      "fasta": "config['fasta']"
+    },
+    "output": {
+      "index_files": "expand(config['bowtie2_index_path'] + '/reference_index.{suffix}.bt2', suffix=['1', '2', '3', '4', 'rev.1', 'rev.2'])",
+      "done": "touch(_bowtie2_done)"
+    },
+    "params": {
+      "idx_dir": "config['bowtie2_index_path']"
+    },
+    "threads": 4,
+    "resources": {
+      "mem_mb": 8000
+    },
+    "run": "shell(\"\"\"\nsource /etc/profile.d/modules.sh\nmodule load bowtie2\nmkdir -p {params.idx_dir}\nbowtie2-build {input.fasta} {params.idx_dir}/reference_index --threads {threads}\ntouch {output.done}\n\"\"\")"
+  },
+  "remove_rrna": {
+    "name": "remove_rrna",
+    "description": "Deplete ribosomal RNA reads with Bowtie2, aligning against the genome-derived Bowtie2 index (same one build_bowtie2_index produces).",
+    "input": {
+      "r1": "run_output/fastp/{sample}_1.fastq.gz",
+      "r2": "run_output/fastp/{sample}_2.fastq.gz",
+      "bowtie2_done": "config['bowtie2_index_path'] + '/bowtie2.done'"
+    },
+    "output": {
+      "r1": "run_output/rrna/{sample}_no_rRNA.fastq.1.gz",
+      "r2": "run_output/rrna/{sample}_no_rRNA.fastq.2.gz",
+      "done": "run_output/rrna/{sample}/remove_rrna.done"
+    },
+    "params": {
+      "index_prefix": "lambda wc: f\"{config['bowtie2_index_path']}/reference_index\""
+    },
+    "threads": 8,
+    "resources": {
+      "mem_mb": 32000
+    },
+    "run": "shell(\"\"\"\nmkdir -p run_output/rrna/{wildcards.sample}\nsource /etc/profile.d/modules.sh\nmodule load bowtie2\nbowtie2 -x {params.index_prefix} \\\n    -1 {input.r1} -2 {input.r2} \\\n    --no-unal --omit-sec-seq \\\n    --threads {threads} --mm --seed 1337 --time \\\n    --un-conc-gz run_output/rrna/{wildcards.sample}_no_rRNA.fastq.gz \\\n    2> run_output/rrna/{wildcards.sample}_no_rRNA.log\ntouch {output.done}\n\"\"\")"
   }
 }
